@@ -1,0 +1,181 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connect - Anonymous</title>
+    <link rel="stylesheet" href="{% static 'chat/css/style.css' %}">
+    <style>
+            .status-pulse {
+              width: 80px;
+              height: 80px;
+              background: #00b894;
+              border-radius: 50%;
+              margin: 0 auto 20px;
+              animation: pulse 2s infinite; /* ⬅️ यहां */
+            }
+
+            @keyframes pulse {
+              0% {
+                transform: scale(0.95);
+                box-shadow: 0 0 0 0 rgba(0, 184, 148, 0.7);
+              }
+              70% {
+                transform: scale(1);
+                box-shadow: 0 0 0 20px rgba(0, 184, 148, 0);
+              }
+              100% {
+                transform: scale(0.95);
+                box-shadow: 0 0 0 0 rgba(0, 184, 148, 0);
+              }
+            }
+    </style>
+</head>
+<style>
+    body{
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+</style>
+<body>
+
+{% if searching %}
+<div class="container2">
+    <div class="searching-overlay">
+        <div class="modal-content">
+            <h1>Finding a match...</h1>
+            <div class="status-pulse" id="statusIcon"></div>
+            <p>Please wait while we connect you to someone</p>
+             <a href="{% url 'home' %}" class="btn-skip">Cancel</a>
+        </div>
+    </div>
+</div>
+<script>
+           setTimeout(function() {
+            window.location.href = "{% url 'match_user' mode=mode name=name %}";
+        }, 3000);
+</script>
+
+
+{% else %}
+
+<div class="container">
+    {% if messages %}
+    <div class="messages">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}" style="padding:10px 15px; margin-bottom:12px; border-radius:8px; background:#f1f1f1;">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <header>
+        <h1>Anonymous Connect</h1>
+        <div class="wallet-info">
+            Wallet: ₹{{ profile.wallet_balance|default:"0" }}
+            <a href="{% url 'premium_page' %}" class="btn-premium">Go Premium</a>
+        </div>
+    </header>
+
+    <section class="form-section">
+        <!-- Added ID to the form for JavaScript access -->
+        <form id="preferencesForm" method="POST">
+            {% csrf_token %}
+
+            <h3>What should we call you?</h3>
+            <div class="grid-form">
+                <input type="text" name="display_name" placeholder="Enter your name" required value="{{ profile.display_name|default:'' }}">
+            </div>
+
+            <h3>Tell us about yourself</h3>
+            <div class="grid-form">
+                <input type="number" name="age" placeholder="Your Age" required value="{{ profile.age|default:'25' }}">
+
+                <select name="sex">
+                    <option value="any" {% if profile.sex == 'any' %}selected{% endif %}>Sex: Any</option>
+                    <option value="male" {% if profile.sex == 'male' %}selected{% endif %}>Male</option>
+                    <option value="female" {% if profile.sex == 'female' %}selected{% endif %}>Female</option>
+                </select>
+
+                <select name="profession">
+                    <option value="any" {% if profile.profession == 'any' %}selected{% endif %}>Profession: Any</option>
+                    <option value="student" {% if profile.profession == 'student' %}selected{% endif %}>Student</option>
+                    <option value="engineer" {% if profile.profession == 'engineer' %}selected{% endif %}>Engineer</option>
+                    <option value="lawyer" {% if profile.profession == 'lawyer' %}selected{% endif %}>Lawyer</option>
+                    <option value="other" {% if profile.profession == 'other' %}selected{% endif %}>Other</option>
+                </select>
+            </div>
+
+            <hr>
+            <h3>Match Preferences {% if not profile.is_premium %}<span class="premium-tag">Premium Service</span>{% endif %}</h3>
+            <div class="grid-form">
+                <select name="pref_sex" {% if not profile.is_premium %}disabled{% endif %}>
+                    <option value="any" {% if profile.pref_sex == 'any' %}selected{% endif %}>Preference: Any Sex</option>
+                    <option value="male" {% if profile.pref_sex == 'male' %}selected{% endif %}>Male</option>
+                    <option value="female" {% if profile.pref_sex == 'female' %}selected{% endif %}>Female</option>
+                </select>
+
+                <select name="pref_profession" {% if not profile.is_premium %}disabled{% endif %}>
+                    <option value="any" {% if profile.pref_profession == 'any' %}selected{% endif %}>Preference: Any Profession</option>
+                    <option value="student" {% if profile.pref_profession == 'student' %}selected{% endif %}>Student</option>
+                    <option value="engineer" {% if profile.pref_profession == 'engineer' %}selected{% endif %}>Engineer</option>
+                    <option value="lawyer" {% if profile.pref_profession == 'lawyer' %}selected{% endif %}>Lawyer</option>
+                </select>
+            </div>
+
+            <!-- Hidden input to determine which mode was chosen -->
+            <input type="hidden" name="connection_mode" id="connectionMode" value="">
+        </form>
+    </section>
+
+    <section class="action-section">
+        <div class="main-actions">
+            <!-- Buttons now trigger the JavaScript function instead of direct links -->
+            <button type="button" class="btn-action chat" onclick="submitAndConnect('chat')">Connect Random Chat</button>
+            <button type="button" class="btn-action voice" onclick="submitAndConnect('voice')">Connect Voice Call</button>
+        </div>
+        <div class="secondary-actions">
+            <a href="{% url 'connect_last_user' %}" class="btn-last">Connect Last User <span class="premium-tag">Premium</span></a>
+        </div>
+    </section>
+</div>
+
+<!-- Registration Overlay (Modal) -->
+{% if show_register_modal and not user.is_authenticated %}
+<div id="regModal" class="modal-overlay">
+    <div class="modal-content">
+        <h2>Complete Registration</h2>
+        <p>Register to save your preferences and earn rewards.</p>
+        <div class="modal-buttons">
+            <a href="{% url 'login' %}" class="btn-submit" style="text-decoration: none; display: inline-block;">Register Now</a>
+            <button class="btn-skip" onclick="closeModal()">Skip for now</button>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+    function submitAndConnect(mode) {
+        const form = document.getElementById('preferencesForm');
+
+        // Basic Validation Check
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return {"error": "Please fill out all required fields."}
+        }
+
+        document.getElementById('connectionMode').value = mode;
+        form.submit();
+    }
+
+    function closeModal() {
+        const modal = document.getElementById('regModal');
+        if (modal) modal.style.display = 'none';
+    }
+</script>
+<script src="{% static 'chat/js/main.js' %}"></script>
+{% endif %}
+</body>
+</html>

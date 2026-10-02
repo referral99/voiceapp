@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+<body>
+
+<div class="container">
+    <ul>
+        <li><a href=""></a></li>
+        <li><a href=""></a></li>
+        <li><a href=""></a></li>
+    </ul>
+</div>
+<button id="windowButton">Open new tab</button>
+<h1 id="log"></h1>
+<button command="show-modal" commandfor="my-dialog">Open dialog</button>
+
+<button commandfor="mypopover" command="toggle-popover">
+  Toggle the popover
+</button>
+<button commandfor="mydialog" command="show-modal">Show modal dialog</button>
+<button commandfor="my-img" command="--rotate-left">Rotate left</button>
+<button commandfor="my-img" command="--rotate-right">Rotate right</button>
+<img id="my-img" src="photo.jpg" alt="[add appropriate alt text here]" />
+<script>
+    const windowButton = document.querySelector("#windowButton");
+const log = document.querySelector("#log");
+
+windowButton.addEventListener("click", () => {
+  if (window.confirm("Do you want to open in new tab?")) {
+    window.open("https://developer.mozilla.org/en-US/docs/Web/API/Window/open");
+  } else {
+    log.innertext = "<center>Glad you're staying!</center>";
+  }
+});
+</script>
+
+</body>
+</html>

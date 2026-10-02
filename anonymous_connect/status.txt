@@ -1,0 +1,15 @@
+﻿
+Successfully installed Automat-25.4.16 Django-5.2.14 Incremental-24.11.0 PyJWT-2.12.1 
+Twisted-25.5.0 aiohappyeyeballs-2.6.1 aiohttp-3.13.5 aiohttp-retry-2.9.1 
+aiosignal-1.4.0 asgiref-3.11.1 async-timeout-5.0.1 attrs-26.1.0 autobahn-24.4.2 
+certifi-2026.4.22 cffi-2.0.0 channels-4.3.2 channels_redis-4.3.0 
+charset-normalizer-3.4.7 constantly-23.10.4 cryptography-48.0.0 daphne-4.2.1 
+django-allauth-65.16.1 frozenlist-1.8.0 hyperlink-21.0.0 idna-3.13 msgpack-1.1.2 
+multidict-6.7.1 packaging-26.2 propcache-0.5.2 psycopg2-binary-2.9.12 pyOpenSSL-26.2.0 
+pyasn1-0.6.3 pyasn1_modules-0.4.2 pycparser-3.0 razorpay-2.0.1 redis-7.4.0 
+requests-2.33.1 service-identity-24.2.0 setuptools-84.0.0 sqlparse-0.5.5 tomli-2.4.1 
+twilio-9.10.9 txaio-25.9.2 typing_extensions-4.15.0 tzdata-2026.2 urllib3-2.7.0 
+whitenoise-6.12.0 yarl-1.23.0 zope.interface-8.4
+EXITCODE=0
+
+

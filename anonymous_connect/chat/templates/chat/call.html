@@ -1,0 +1,634 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connecting... | Anonymous Connect</title>
+    <link rel="stylesheet" href="{% static 'chat/css/style.css' %}">
+    <style>
+        /* ===== WhatsApp-style chat screen ===== */
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #d2dbdf; font-family: "Segoe UI", Helvetica, Arial, sans-serif; }
+
+        .wa-phone {
+            max-width: 480px; margin: 0 auto; height: 100vh;
+            display: flex; flex-direction: column; background: #efeae2;
+        }
+
+        /* --- Header (indigo/violet gradient — distinct from WhatsApp) --- */
+        .wa-header {
+            display: flex; align-items: center; gap: 12px;
+            background: linear-gradient(135deg, #4a2b8c 0%, #6d28d9 55%, #8b3fd1 100%);
+            color: #fff; padding: 10px 14px; flex: 0 0 auto;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+        }
+        .wa-avatar {
+            width: 42px; height: 42px; border-radius: 50%;
+            background: linear-gradient(135deg, #ffd36e, #ff7eb3);
+            color: #3a1d6e; display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 1.1em; flex: 0 0 auto; text-transform: uppercase;
+        }
+        .wa-peer { flex: 1 1 auto; min-width: 0; }
+        .wa-peer .wa-name { font-weight: 600; font-size: 1.05em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .wa-peer .wa-sub { font-size: 0.78em; opacity: 0.85; }
+        .wa-header-actions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+        .wa-timer { font-size: 1.4em; font-weight: 700; opacity: 1; margin-right: 8px; }
+        .wa-icon-btn {
+            background: transparent; border: none; color: #fff; cursor: pointer;
+            font-size: 1.2em; padding: 6px; border-radius: 50%; line-height: 1;
+        }
+        .wa-icon-btn:hover { background: rgba(255,255,255,0.15); }
+        .wa-icon-btn:disabled { opacity: 0.5; cursor: default; }
+        .wa-icon-btn.hangup { color: #ffd0d0; }
+
+        /* --- Chat area: custom wallpaper image --- */
+        #chat-log {
+            flex: 1 1 auto; overflow-y: auto; padding: 14px 10px;
+            display: flex; flex-direction: column; gap: 2px;
+            background-color: #2a3a5e;
+            background-image: url("{% static 'chat/images/chat-bg.png' %}");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: local;
+        }
+
+        /* --- Message bubbles --- */
+        .msg-row { display: flex; margin-bottom: 2px; max-width: 100%; }
+        .msg-row.sent { justify-content: flex-end; }
+        .msg-row.received { justify-content: flex-start; }
+
+        .msg {
+            padding: 6px 9px 8px; border-radius: 8px;
+            max-width: 78%; word-wrap: break-word; overflow-wrap: anywhere;
+            position: relative; font-size: 0.95em; line-height: 1.32;
+            box-shadow: 0 1px 0.5px rgba(0,0,0,0.13);
+        }
+        /* Messages I sent -> right, WhatsApp green bubble */
+        .msg-row.sent .msg {
+            background: #d9fdd3; color: #111b21; border-top-right-radius: 0;
+        }
+        /* Messages from partner -> left, white bubble */
+        .msg-row.received .msg {
+            background: #ffffff; color: #111b21; border-top-left-radius: 0;
+        }
+        /* Bubble tails */
+        .msg-row.sent .msg::after {
+            content: ""; position: absolute; top: 0; right: -8px;
+            border: 8px solid transparent; border-top-color: #d9fdd3; border-right: 0;
+        }
+        .msg-row.received .msg::after {
+            content: ""; position: absolute; top: 0; left: -8px;
+            border: 8px solid transparent; border-top-color: #ffffff; border-left: 0;
+        }
+
+        .msg .msg-sender { font-size: 0.74em; font-weight: 700; color: #8b3fd1; margin-bottom: 1px; }
+        .msg .msg-text { white-space: pre-wrap; }
+        /* Time + ticks sit bottom-right, WhatsApp style */
+        .msg .msg-meta {
+            display: inline-flex; align-items: center; gap: 3px;
+            font-size: 0.68em; color: #667781; float: right;
+            margin-left: 10px; margin-top: 4px; position: relative; bottom: -2px;
+        }
+        .msg .msg-time { font-size: 1em; }
+        /* Ticks */
+        .ticks { display: inline-flex; align-items: center; font-weight: bold; letter-spacing: -4px; padding-right: 2px; }
+        .ticks.read { color: #53bdeb; }        /* blue double tick when read */
+        .ticks.delivered { color: #8696a0; }   /* grey single tick when sent */
+
+        /* --- Voice-call status banner (below header) --- */
+        #voice-banner {
+            display: none; align-items: center; justify-content: center; gap: 12px;
+            background: linear-gradient(135deg, #6d28d9, #8b3fd1); color: #fff;
+            padding: 9px 14px; font-weight: 600; font-size: 0.9em; flex: 0 0 auto;
+        }
+        #voice-banner.active { display: flex; }
+        .voice-dot { width: 9px; height: 9px; border-radius: 50%; background: #fff; animation: pulse-dot 1.2s infinite; }
+        @keyframes pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .btn-voice-small { background: rgba(255,255,255,0.25); color:#fff; border:none; padding:6px 14px; border-radius:20px; cursor:pointer; }
+
+        /* --- Input bar --- */
+        .wa-input-bar {
+            display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+            background: #1f2340; flex: 0 0 auto;
+        }
+        #chat-message-input {
+            flex: 1 1 auto; padding: 12px 18px; border-radius: 24px;
+            border: 1px solid #3a3f66; outline: none; font-size: 0.98em;
+            background: #2b3054; color: #eef0ff;
+        }
+        #chat-message-input::placeholder { color: #9aa0c7; }
+        #chat-message-input:focus { border-color: #8b3fd1; box-shadow: 0 0 0 2px rgba(139,63,209,0.25); }
+        /* Distinct gradient pill send button (not a WhatsApp round green) */
+        .wa-send-btn {
+            min-width: 64px; height: 46px; padding: 0 22px; border-radius: 24px;
+            border: none; cursor: pointer; flex: 0 0 auto; font-weight: 700;
+            letter-spacing: 0.5px; font-size: 0.95em;
+            background: linear-gradient(135deg, #ff7eb3 0%, #8b3fd1 100%);
+            color: #fff; display: flex; align-items: center; justify-content: center; gap: 6px;
+            box-shadow: 0 3px 10px rgba(139,63,209,0.45);
+            transition: transform 0.08s ease, box-shadow 0.15s ease;
+        }
+        .wa-send-btn:hover { box-shadow: 0 5px 16px rgba(139,63,209,0.6); }
+        .wa-send-btn:active { transform: scale(0.96); }
+
+        /* Pure voice-mode fallback panel */
+        .wa-voice-panel { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; color: #3b4a54; }
+        .status-pulse {
+            width: 90px; height: 90px;
+            background: linear-gradient(135deg, #ff7eb3, #8b3fd1);
+            border-radius: 50%; animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(139, 63, 209, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 20px rgba(139, 63, 209, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(139, 63, 209, 0); }
+        }
+
+        /* --- Participant-disconnect overlay --- */
+        .dc-overlay {
+            display: none; position: fixed; inset: 0; z-index: 1000;
+            align-items: center; justify-content: center; padding: 20px;
+            background: rgba(20, 16, 40, 0.72);
+        }
+        .dc-overlay.active { display: flex; }
+        .dc-dialog {
+            width: 100%; max-width: 380px; background: #ffffff; border-radius: 12px;
+            padding: 26px 24px 22px; text-align: center;
+            box-shadow: 0 18px 48px rgba(0, 0, 0, 0.4);
+        }
+        .dc-title {
+            margin: 0 0 10px; font-size: 1.25em; font-weight: 700; color: #3a1d6e;
+        }
+        .dc-message {
+            margin: 0 0 22px; font-size: 0.95em; line-height: 1.5; color: #4a4a5a;
+        }
+        .dc-actions { display: flex; flex-direction: column; gap: 10px; }
+        .dc-btn {
+            width: 100%; padding: 12px 18px; border-radius: 24px; border: none;
+            cursor: pointer; font-size: 0.95em; font-weight: 700; letter-spacing: 0.3px;
+            transition: transform 0.08s ease, box-shadow 0.15s ease;
+        }
+        .dc-btn:active { transform: scale(0.97); }
+        .dc-btn-primary {
+            color: #fff;
+            background: linear-gradient(135deg, #ff7eb3 0%, #8b3fd1 100%);
+            box-shadow: 0 3px 10px rgba(139, 63, 209, 0.45);
+        }
+        .dc-btn-primary:hover { box-shadow: 0 5px 16px rgba(139, 63, 209, 0.6); }
+        .dc-btn-secondary {
+            color: #4a2b8c; background: #f0ebfa; border: 1px solid #d9ccf3;
+        }
+        .dc-btn-secondary:hover { background: #e7def7; }
+    </style>
+</head>
+<body>
+
+<div class="wa-phone">
+
+    <!-- WhatsApp-style header -->
+    <div class="wa-header">
+        <div class="wa-avatar">{{ match_name|first|default:"?" }}</div>
+        <div class="wa-peer">
+            <div class="wa-name" id="callStatus2">{{ match_name }}</div>
+            <div class="wa-sub" id="callStatus">You: {{ name }}</div>
+        </div>
+        <div class="wa-header-actions">
+            <span class="wa-timer" id="countdown">05:00</span>
+            {% if mode == 'chat' %}
+            <button class="wa-icon-btn" id="start-call-btn" title="Start voice call" onclick="requestVoiceCall()">📞</button>
+            {% endif %}
+            <button class="wa-icon-btn hangup" title="End connection" onclick="hangup()">⏻</button>
+        </div>
+    </div>
+
+    <!-- Voice call status banner (shown in both modes while a call is active/ringing) -->
+    <div id="voice-banner">
+        <span class="voice-dot"></span>
+        <span id="voice-banner-text">Voice call</span>
+        <button class="btn-voice-small" id="voice-accept" style="display:none;">Accept</button>
+        <button class="btn-voice-small" id="voice-reject" style="display:none;">Decline</button>
+        <button class="btn-voice-small" id="voice-end" style="display:none;">End call</button>
+    </div>
+
+    {% if mode == 'chat' %}
+    <div id="chat-log"></div>
+    <div class="wa-input-bar">
+        <input id="chat-message-input" type="text" placeholder="Type a message">
+        <button id="chat-message-submit" class="wa-send-btn" title="Send">Send <span style="font-size:1.05em;">➤</span></button>
+    </div>
+    {% else %}
+    <div class="wa-voice-panel">
+        <div class="status-pulse"></div>
+        <p>Voice is active. Speak into your microphone.</p>
+    </div>
+    {% endif %}
+
+    <!-- Remote audio sink: present in both modes so chat can escalate to voice. -->
+    <audio id="remoteAudio" autoplay></audio>
+</div>
+
+<!-- Partner-disconnect overlay: shown when the other participant leaves. -->
+<div id="disconnect-overlay" class="dc-overlay">
+    <div class="dc-dialog" role="dialog" aria-modal="true" aria-labelledby="dc-title">
+        <h2 id="dc-title" class="dc-title">Participant Disconnected</h2>
+        <p class="dc-message">
+            The other participant has ended the session. You may reconnect with a new
+            participant or return to the home page.
+        </p>
+        <div class="dc-actions">
+            <button type="button" class="dc-btn dc-btn-primary" id="dc-reconnect">Reconnect</button>
+            <button type="button" class="dc-btn dc-btn-secondary" id="dc-home">Return to Home</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    sessionStorage.removeItem('search_start_time');
+    const roomName = "{{ room_name }}";
+    const mode = "{{ mode }}";
+    const myName = "{{ name|escapejs }}";
+    const duration = parseInt("{{ timer }}", 10);
+    const ws_scheme = window.location.protocol === "https:" ? "wss" : "ws";
+
+    // Unique per-browser-tab identity used to tell "my" messages from the
+    // partner's (display names may collide, this never does).
+    let myId = sessionStorage.getItem('client_id');
+    if (!myId) {
+        myId = 'c_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+        sessionStorage.setItem('client_id', myId);
+    }
+
+    let isHangingUp = false;
+    let peerConnection = null;
+    let localStream = null;
+    let voiceActive = false;      // a WebRTC audio session is live
+    let pendingCandidates = [];   // ICE candidates buffered until remote desc is set
+
+    // 1. Initialize WebSocket for the room.
+    const chatSocket = new WebSocket(`${ws_scheme}://${window.location.host}/ws/chat/${roomName}/`);
+
+    // 2. Chat send-message wiring.
+    const input = document.getElementById('chat-message-input');
+    const submit = document.getElementById('chat-message-submit');
+    const chatLog = document.getElementById('chat-log');
+
+    function newMessageId() {
+        return 'm_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    }
+
+    if (submit && input) {
+        submit.onclick = function () {
+            const message = input.value;
+            if (message.trim() !== "") {
+                const messageId = newMessageId();
+                // Render my own bubble immediately (right side) with a single
+                // "sent" tick; it upgrades to blue double-tick on read receipt.
+                appendMessage(myName, message, true, messageId);
+                chatSocket.send(JSON.stringify({
+                    'type': 'chat',
+                    'message': message,
+                    'sender_id': myId,
+                    'message_id': messageId,
+                }));
+                input.value = '';
+            }
+        };
+        input.onkeyup = function (e) { if (e.key === 'Enter') submit.click(); };
+    }
+
+    function tickMarkup(state) {
+        // state: 'sent' (single grey), 'read' (double blue)
+        if (state === 'read') return '<span class="ticks read">✓✓</span>';
+        return '<span class="ticks delivered">✓</span>';
+    }
+
+    function currentTime() {
+        const d = new Date();
+        let h = d.getHours();
+        const m = d.getMinutes().toString().padStart(2, '0');
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        h = h % 12; if (h === 0) h = 12;
+        return h + ':' + m + ' ' + ampm;
+    }
+
+    function appendMessage(sender, message, isMine, messageId) {
+        if (!chatLog) return;
+
+        const row = document.createElement('div');
+        row.className = 'msg-row ' + (isMine ? 'sent' : 'received');
+
+        const bubble = document.createElement('div');
+        bubble.className = 'msg';
+
+        let html = '';
+        if (!isMine) {
+            html += '<div class="msg-sender">' + escapeHtml(sender) + '</div>';
+        }
+        html += '<span class="msg-text">' + escapeHtml(message) + '</span>';
+        // WhatsApp-style meta: timestamp, and ticks for my own messages.
+        html += '<span class="msg-meta">'
+             +  '<span class="msg-time">' + currentTime() + '</span>'
+             +  (isMine ? '<span data-tick>' + tickMarkup('sent') + '</span>' : '')
+             +  '</span>';
+        bubble.innerHTML = html;
+
+        if (messageId) {
+            row.dataset.messageId = messageId;
+        }
+        row.appendChild(bubble);
+        chatLog.appendChild(row);
+        chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    function escapeHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
+    function markMessageRead(messageId) {
+        if (!messageId || !chatLog) return;
+        const row = chatLog.querySelector('.msg-row[data-message-id="' + messageId + '"]');
+        if (!row) return;
+        const meta = row.querySelector('[data-tick]');
+        if (meta) meta.innerHTML = tickMarkup('read');
+    }
+
+    // 3. Timer wiring.
+    let timeLeft = duration;
+    const countdownEl = document.getElementById('countdown');
+    const timerInterval = setInterval(() => {
+        if (duration > 10000) { if (countdownEl) countdownEl.innerText = "Unlimited"; return; }
+        const mins = Math.floor(timeLeft / 60);
+        const secs = timeLeft % 60;
+        if (countdownEl) {
+            countdownEl.innerText = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+        if (timeLeft <= 0) { clearInterval(timerInterval); hangup(); }
+        timeLeft--;
+    }, 1000);
+
+    // 4. WebRTC helpers (voice).
+    const rtcConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+
+    const voiceBanner = document.getElementById('voice-banner');
+    const voiceBannerText = document.getElementById('voice-banner-text');
+    const btnVoiceAccept = document.getElementById('voice-accept');
+    const btnVoiceReject = document.getElementById('voice-reject');
+    const btnVoiceEnd = document.getElementById('voice-end');
+    const startCallBtn = document.getElementById('start-call-btn');
+
+    function showBanner(text, opts) {
+        opts = opts || {};
+        if (!voiceBanner) return;
+        voiceBanner.classList.add('active');
+        voiceBannerText.innerText = text;
+        btnVoiceAccept.style.display = opts.accept ? 'inline-block' : 'none';
+        btnVoiceReject.style.display = opts.reject ? 'inline-block' : 'none';
+        btnVoiceEnd.style.display = opts.end ? 'inline-block' : 'none';
+    }
+    function hideBanner() {
+        if (voiceBanner) voiceBanner.classList.remove('active');
+    }
+
+    async function startVoice(createPeer) {
+        if (!localStream) {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            } catch (err) {
+                console.error("Microphone access denied:", err);
+                alert("Please enable microphone access for voice calls.");
+                return false;
+            }
+        }
+        if (createPeer && !peerConnection) {
+            peerConnection = new RTCPeerConnection(rtcConfig);
+            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+            peerConnection.ontrack = function (event) {
+                const remoteAudio = document.getElementById('remoteAudio');
+                if (remoteAudio) remoteAudio.srcObject = event.streams[0];
+            };
+            peerConnection.onicecandidate = function (event) {
+                if (event.candidate) {
+                    chatSocket.send(JSON.stringify({ 'type': 'ice-candidate', 'candidate': event.candidate }));
+                }
+            };
+        }
+        return true;
+    }
+
+    async function flushPendingCandidates() {
+        if (!peerConnection) return;
+        for (const c of pendingCandidates) {
+            try { await peerConnection.addIceCandidate(new RTCIceCandidate(c)); }
+            catch (err) { console.error("Error adding buffered ICE candidate", err); }
+        }
+        pendingCandidates = [];
+    }
+
+    // --- Voice call control (chat -> voice escalation) ---
+
+    // Caller: ask the partner to start a voice call.
+    async function requestVoiceCall() {
+        if (voiceActive) return;
+        if (startCallBtn) startCallBtn.disabled = true;
+        showBanner('Calling ' + "{{ match_name|escapejs }}" + '...', { end: true });
+        chatSocket.send(JSON.stringify({ 'type': 'call-request' }));
+    }
+
+    // Callee: accept an incoming request -> create peer and send offer.
+    async function acceptVoiceCall() {
+        const ok = await startVoice(true);
+        if (!ok) { chatSocket.send(JSON.stringify({ 'type': 'call-reject' })); hideBanner(); return; }
+        chatSocket.send(JSON.stringify({ 'type': 'call-accept' }));
+        voiceActive = true;
+        showBanner('🔊 Voice call connected', { end: true });
+        // Callee initiates the SDP offer once media is ready.
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        chatSocket.send(JSON.stringify({ 'type': 'offer', 'sdp': peerConnection.localDescription }));
+    }
+
+    function rejectVoiceCall() {
+        chatSocket.send(JSON.stringify({ 'type': 'call-reject' }));
+        hideBanner();
+    }
+
+    function endVoiceCall(notifyPeer) {
+        if (notifyPeer) chatSocket.send(JSON.stringify({ 'type': 'call-hangup' }));
+        voiceActive = false;
+        if (peerConnection) { try { peerConnection.close(); } catch (e) {} peerConnection = null; }
+        if (localStream && mode === 'chat') {
+            // In chat mode we release the mic when the call ends.
+            localStream.getTracks().forEach(t => t.stop());
+            localStream = null;
+        }
+        pendingCandidates = [];
+        const remoteAudio = document.getElementById('remoteAudio');
+        if (remoteAudio) remoteAudio.srcObject = null;
+        if (startCallBtn) startCallBtn.disabled = false;
+        hideBanner();
+    }
+
+    if (btnVoiceAccept) btnVoiceAccept.onclick = acceptVoiceCall;
+    if (btnVoiceReject) btnVoiceReject.onclick = rejectVoiceCall;
+    if (btnVoiceEnd) btnVoiceEnd.onclick = function () { endVoiceCall(true); };
+
+    // 5. Socket lifecycle.
+    chatSocket.onopen = async function () {
+        if (mode === 'voice') {
+            // Pure voice mode keeps the original auto-connect behaviour.
+            await startVoice(true);
+            voiceActive = true;
+            showBanner('🔊 Voice call connected', { end: true });
+            setTimeout(async () => {
+                if (peerConnection && peerConnection.signalingState === 'stable') {
+                    const offer = await peerConnection.createOffer();
+                    await peerConnection.setLocalDescription(offer);
+                    chatSocket.send(JSON.stringify({ 'type': 'offer', 'sdp': peerConnection.localDescription }));
+                }
+            }, 800);
+        }
+    };
+
+    chatSocket.onmessage = async function (e) {
+        const data = JSON.parse(e.data);
+
+        if (data.type === 'call_ended') {
+            const statusElement = document.getElementById('callStatus');
+            if (statusElement) {
+                statusElement.innerHTML = "<span style='color: #d63031;'>Connection Lost: Participant Disconnected</span>";
+            }
+            clearInterval(timerInterval);
+            endVoiceCall(false);
+            showDisconnectOverlay();
+            return;
+        }
+
+        if (data.type === 'chat_message') {
+            const fromMe = data.sender_id && data.sender_id === myId;
+            if (fromMe) {
+                // My own echo from the server: I already rendered it locally.
+                return;
+            }
+            appendMessage(data.sender || 'Anonymous', data.message, false, data.message_id);
+            // Tell the sender we've seen it -> drives their blue double-tick.
+            if (data.message_id) {
+                chatSocket.send(JSON.stringify({ 'type': 'read_receipt', 'message_id': data.message_id }));
+            }
+            return;
+        }
+
+        if (data.type === 'read_receipt') {
+            markMessageRead(data.message_id);
+            return;
+        }
+
+        // --- Voice call control ---
+        if (data.type === 'call-request') {
+            if (voiceActive) { chatSocket.send(JSON.stringify({ 'type': 'call-reject' })); return; }
+            showBanner('📞 ' + "{{ match_name|escapejs }}" + ' is calling...', { accept: true, reject: true });
+            return;
+        }
+        if (data.type === 'call-accept') {
+            // Partner accepted my request; wait for their offer. Keep banner.
+            showBanner('🔊 Voice call connected', { end: true });
+            voiceActive = true;
+            // Make sure my mic/peer is ready to answer the incoming offer.
+            await startVoice(true);
+            return;
+        }
+        if (data.type === 'call-reject') {
+            alert("Voice call declined.");
+            endVoiceCall(false);
+            return;
+        }
+        if (data.type === 'call-hangup') {
+            endVoiceCall(false);
+            return;
+        }
+
+        // --- WebRTC signalling ---
+        if (data.type === 'offer') {
+            await startVoice(true);
+            voiceActive = true;
+            if (mode === 'chat') showBanner('🔊 Voice call connected', { end: true });
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+            await flushPendingCandidates();
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            chatSocket.send(JSON.stringify({ 'type': 'answer', 'sdp': peerConnection.localDescription }));
+        } else if (data.type === 'answer') {
+            if (peerConnection) {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+                await flushPendingCandidates();
+            }
+        } else if (data.type === 'ice-candidate') {
+            if (data.candidate) {
+                if (peerConnection && peerConnection.remoteDescription) {
+                    try { await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate)); }
+                    catch (err) { console.error("Error adding ICE candidate", err); }
+                } else {
+                    // Buffer until the remote description is in place.
+                    pendingCandidates.push(data.candidate);
+                }
+            }
+        }
+    };
+
+    // 6. Partner-disconnect overlay + reconnect flow.
+    const disconnectOverlay = document.getElementById('disconnect-overlay');
+
+    function showDisconnectOverlay() {
+        if (disconnectOverlay) disconnectOverlay.classList.add('active');
+    }
+
+    function cleanupBeforeNavigate() {
+        isHangingUp = true;
+        clearInterval(timerInterval);
+        if (localStream) { localStream.getTracks().forEach(t => t.stop()); }
+        if (peerConnection) { try { peerConnection.close(); } catch (e) {} }
+        if (chatSocket && chatSocket.readyState === WebSocket.OPEN) { chatSocket.close(); }
+    }
+
+    const dcReconnectBtn = document.getElementById('dc-reconnect');
+    const dcHomeBtn = document.getElementById('dc-home');
+
+    if (dcReconnectBtn) {
+        dcReconnectBtn.onclick = function () {
+            dcReconnectBtn.disabled = true;
+            cleanupBeforeNavigate();
+            // Server enforces the reconnect allowance; free members get one
+            // reconnect, after which they are directed to the premium page.
+            window.location.href = "{% url 'reconnect_user' mode='MODE' name='NAME' %}"
+                .replace('MODE', encodeURIComponent(mode))
+                .replace('NAME', encodeURIComponent(myName));
+        };
+    }
+    if (dcHomeBtn) {
+        dcHomeBtn.onclick = function () {
+            cleanupBeforeNavigate();
+            window.location.href = "{% url 'hangup_view' %}";
+        };
+    }
+
+    window.addEventListener('beforeunload', function () {
+        if (!isHangingUp && chatSocket.readyState === WebSocket.OPEN) {
+            chatSocket.close();
+        }
+    });
+
+    function hangup() {
+        isHangingUp = true;
+        clearInterval(timerInterval);
+        if (localStream) { localStream.getTracks().forEach(t => t.stop()); }
+        if (peerConnection) { try { peerConnection.close(); } catch (e) {} }
+        if (chatSocket && chatSocket.readyState === WebSocket.OPEN) { chatSocket.close(); }
+        window.location.href = "{% url 'hangup_view' %}";
+    }
+</script>
+</body>
+</html>

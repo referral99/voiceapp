@@ -1,0 +1,91 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Go Premium | Anonymous Connect</title>
+    <link rel="stylesheet" href="{% static 'chat/css/style.css' %}">
+    <style>
+        .premium-card { text-align: center; padding: 20px; }
+        .price { font-size: 2.5em; font-weight: bold; color: var(--primary); margin: 10px 0; }
+        .perks { list-style: none; padding: 0; margin: 20px auto; max-width: 320px; text-align: left; }
+        .perks li { padding: 8px 0; border-bottom: 1px solid #eee; }
+        .perks li::before { content: "✓ "; color: #00b894; font-weight: bold; }
+        .btn-pay { background: var(--premium); color: #000; border: none; padding: 14px 40px;
+                   border-radius: 50px; font-size: 1.1em; font-weight: bold; cursor: pointer; }
+        .btn-pay:disabled { opacity: 0.6; cursor: not-allowed; }
+        .messages { margin: 16px auto; max-width: 360px; }
+        .message-banner {
+            background: #f0ebfa; border: 1px solid #d9ccf3; color: #4a2b8c;
+            padding: 12px 16px; border-radius: 8px; font-size: 0.95em; line-height: 1.5;
+            margin: 0 0 10px;
+        }
+    </style>
+</head>
+<body>
+<div class="container premium-card">
+    <header>
+        <h1>Go Premium</h1>
+        <a href="{% url 'home' %}" class="btn-premium">Back</a>
+    </header>
+
+    {% if messages %}
+    <div class="messages">
+        {% for message in messages %}
+        <p class="message-banner">{{ message }}</p>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <p>Hi {{ profile.display_name }}, unlock premium matchmaking.</p>
+    <div class="price">₹500</div>
+
+    <ul class="perks">
+        <li>Filter matches by sex &amp; profession</li>
+        <li>Unlimited call duration</li>
+        <li>Reconnect with your last match</li>
+        <li>₹500 wallet credit</li>
+    </ul>
+
+    {% if profile.is_premium %}
+        <p style="color:#00b894; font-weight:bold;">You are already a Premium member 🎉</p>
+    {% elif payment %}
+        <button id="pay-btn" class="btn-pay">Pay with UPI / Card</button>
+        <form id="success-form" method="POST" action="{% url 'payment_success' %}" style="display:none;">
+            {% csrf_token %}
+            <input type="hidden" name="razorpay_order_id" id="rzp_order_id">
+            <input type="hidden" name="razorpay_payment_id" id="rzp_payment_id">
+            <input type="hidden" name="razorpay_signature" id="rzp_signature">
+        </form>
+        <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+        <script>
+            const options = {
+                key: "{{ razorpay_key }}",
+                amount: "{{ payment.amount }}",
+                currency: "{{ payment.currency }}",
+                name: "Anonymous Connect",
+                description: "Premium Membership",
+                order_id: "{{ payment.id }}",
+                handler: function (response) {
+                    // Pass the gateway response back so the server can verify
+                    // the signature before granting premium.
+                    document.getElementById('rzp_order_id').value = response.razorpay_order_id;
+                    document.getElementById('rzp_payment_id').value = response.razorpay_payment_id;
+                    document.getElementById('rzp_signature').value = response.razorpay_signature;
+                    document.getElementById('success-form').submit();
+                },
+                theme: { color: "#6c5ce7" }
+            };
+            const rzp = new Razorpay(options);
+            document.getElementById('pay-btn').onclick = function (e) {
+                e.preventDefault();
+                rzp.open();
+            };
+        </script>
+    {% else %}
+        <p style="color:#d63031;">Payment gateway is not configured yet. Please try again later.</p>
+    {% endif %}
+</div>
+</body>
+</html>

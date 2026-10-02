@@ -1,0 +1,8 @@
+<form method="POST" action="{% url 'verify_otp' %}">
+    {% csrf_token %}
+    <h2>Verify Mobile</h2>
+    <p>Sent to: {{ request.session.mobile }}</p>
+    <input type="text" name="otp" placeholder="Enter 6-digit OTP" required>
+    {% if error %}<p style="color:red">{{ error }}</p>{% endif %}
+    <button type="submit">Verify & Login</button>
+</form>

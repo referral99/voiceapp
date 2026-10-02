@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.Python
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Django
+*.log
+db.sqlite3
+db.sqlite3-journal
+/anonymous_connect/staticfiles/
+
+# Environment / secrets
+.env
+*.env
+!.env.example
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Helper/scratch files
+*.tmp
+smoke.ps1
+smoke_out.txt
+genreqs.ps1
+pipout.txt
+mm.txt
+mig.txt
+chk*.txt
+collect.txt
+home_resp.txt

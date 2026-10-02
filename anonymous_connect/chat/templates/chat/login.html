@@ -1,0 +1,51 @@
+{% load static %}
+{% load socialaccount %} <!-- Load allauth tags -->
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login | Anonymous Connect</title>
+    <!-- Ensure this path matches your static folder structure -->
+    <link rel="stylesheet" href="{% static 'chat/css/style.css' %}">
+</head>
+<body>
+    <div class="login-container">
+        <h2>Join the Conversation</h2>
+
+        <!-- Mobile OTP Section -->
+        <div class="auth-card">
+            <h3>Login with Mobile</h3>
+            <!-- Updated action to point to the send_otp view -->
+            <form method="POST" action="{% url 'send_otp' %}">
+                {% csrf_token %}
+                <input type="hidden" name="auth_method" value="mobile">
+                <input type="tel" name="mobile_no" placeholder="+91 00000 00000" required>
+                <button type="submit" class="btn-primary">Send OTP</button>
+            </form>
+        </div>
+
+        <div class="divider">OR</div>
+
+        <!-- Email Portal Section -->
+        <div class="auth-card">
+            <h3>Login with Email</h3>
+            <p>Access your premium features via your email portal.</p>
+
+            {% if error %}<p style="color:#d63031;">{{ error }}</p>{% endif %}
+
+            <!-- Link directly to the Google login provider -->
+            <div class="auth-card-content">
+                {% if google_available %}
+                <a href="{% provider_login_url 'google' %}" class="btn-secondary" style="text-decoration: none; display: flex; align-items: center; justify-content: center;">
+                    Sign in with Google
+                </a>
+                {% else %}
+                <button class="btn-secondary" disabled title="Configure Google OAuth in the admin to enable this">
+                    Sign in with Google (not configured)
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>

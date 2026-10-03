@@ -81,6 +81,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'channels',
     'chat',
+    'activity_logging',
     'django.contrib.sites',
     'allauth',
     'allauth.account',
@@ -272,17 +273,24 @@ SOCIALACCOUNT_PROVIDERS = {
 }
 
 # --- Email backend ---
-# Sends real OTP / verification emails over Gmail SMTP. Credentials default to
-# the working Gmail App Password account and can be overridden via env vars.
-# Set EMAIL_BACKEND=console (env var) to print emails to the log instead.
+# Sends real OTP / verification emails over SMTP. Credentials are read from the
+# environment ONLY (never hardcoded) - set EMAIL_HOST_USER / EMAIL_HOST_PASSWORD
+# in your .env or platform env vars. Set EMAIL_BACKEND=console (env var) to print
+# emails to the log instead, which is the recommended default for local dev.
 EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
 EMAIL_USE_TLS = env_bool('EMAIL_USE_TLS', True)
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'noreply.chatsanti@gmail.com')
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', 'zbwc idxj qxlv oina')
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER or 'no-reply@localhost')
 
-if os.environ.get('EMAIL_BACKEND') == 'console':
+# Choose the email backend. Default to the console backend whenever SMTP
+# credentials are not configured so a missing password never silently breaks
+# OTP delivery - the code is logged instead (see send_email_otp). Set
+# EMAIL_BACKEND=smtp explicitly, or just provide EMAIL_HOST_USER/PASSWORD, to
+# send real mail.
+_email_backend = os.environ.get('EMAIL_BACKEND', '').lower()
+if _email_backend == 'console' or (not _email_backend and not EMAIL_HOST_PASSWORD):
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 else:
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
@@ -315,6 +323,14 @@ if RUNNING_TESTS:
 
 # --- Logging ---
 # Log to stdout so cloud platforms (Railway, Render, Fly, etc.) capture it.
+#
+# User-activity logs (visits, call attempts, premium events, etc.) are kept
+# in their OWN rotating file under ``activity_logs/`` via the dedicated
+# ``activity`` logger, so they stay separate from ordinary app/server logs and
+# are easy to turn into a report later.
+ACTIVITY_LOG_DIR = BASE_DIR / 'activity_logs'
+ACTIVITY_LOG_DIR.mkdir(parents=True, exist_ok=True)
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -323,11 +339,26 @@ LOGGING = {
             'format': '{levelname} {asctime} {name} {message}',
             'style': '{',
         },
+        # Activity records are already fully self-describing (key=value), so the
+        # file formatter stays minimal - just a timestamp prefix.
+        'activity': {
+            'format': '{asctime} {message}',
+            'style': '{',
+        },
     },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
             'formatter': 'verbose',
+        },
+        # Dedicated rotating file for user-activity logs only.
+        'activity_file': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(ACTIVITY_LOG_DIR / 'activity.log'),
+            'maxBytes': 5 * 1024 * 1024,   # 5 MB per file
+            'backupCount': 10,             # keep 10 rotated files
+            'encoding': 'utf-8',
+            'formatter': 'activity',
         },
     },
     'root': {
@@ -338,6 +369,14 @@ LOGGING = {
         'django': {
             'handlers': ['console'],
             'level': os.environ.get('DJANGO_LOG_LEVEL', 'INFO'),
+            'propagate': False,
+        },
+        # The activity logger writes to its own file AND to the console (so
+        # cloud log streams still capture it). It does not propagate to root to
+        # avoid duplicate console lines.
+        'activity': {
+            'handlers': ['activity_file', 'console'],
+            'level': 'INFO',
             'propagate': False,
         },
     },

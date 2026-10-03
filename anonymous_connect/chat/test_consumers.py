@@ -9,11 +9,13 @@ These exercise:
 """
 import json
 
+from channels.db import database_sync_to_async
 from channels.routing import URLRouter
 from channels.testing import WebsocketCommunicator
 from django.test import TransactionTestCase, override_settings
 
 from chat import routing
+from chat.models import UserProfile, Status
 
 
 # Force the in-memory channel layer so tests don't require Redis.
@@ -28,15 +30,56 @@ def build_application():
 
 @override_settings(CHANNEL_LAYERS=IN_MEMORY_LAYER)
 class ChatConsumerTests(TransactionTestCase):
-    async def _connect(self, room='room_1_2'):
+    @database_sync_to_async
+    def _make_profile(self, session_id, room):
+        """Create a guest profile already paired into ``room``.
+
+        The consumer now authorizes connections by checking that the profile's
+        ``active_room_name`` matches the room being joined, so tests must set up
+        a profile that is legitimately a member of that room.
+        """
+        return UserProfile.objects.create(
+            session_id=session_id,
+            active_room_name=room,
+            status=Status.Busy,
+        )
+
+    class _FakeSession:
+        """Minimal stand-in for a Django session with a fixed key."""
+        def __init__(self, key):
+            self.session_key = key
+
+    async def _connect(self, room='room_1_2', session_id=None):
+        # Each connection needs its own guest profile that is a member of the
+        # room. Derive a unique session id per connection so two peers in the
+        # same room are distinct profiles.
+        if session_id is None:
+            session_id = f"sess_{room}_{id(object())}"
+        await self._make_profile(session_id, room)
+
         communicator = WebsocketCommunicator(build_application(), f"/ws/chat/{room}/")
-        # The consumer reads scope['session'] / scope['user'] defensively; provide
-        # minimal scope so get_profile() returns None cleanly (sender -> Anonymous).
-        communicator.scope['session'] = None
         communicator.scope['user'] = None
+        communicator.scope['session'] = self._FakeSession(session_id)
         connected, _ = await communicator.connect()
         self.assertTrue(connected)
         return communicator
+
+    async def test_unauthorized_connection_rejected(self):
+        """A client with no profile / not a member of the room is rejected."""
+        communicator = WebsocketCommunicator(build_application(), "/ws/chat/room_99_100/")
+        communicator.scope['user'] = None
+        communicator.scope['session'] = None
+        connected, _ = await communicator.connect()
+        self.assertFalse(connected)
+
+    async def test_wrong_room_connection_rejected(self):
+        """A profile paired into one room cannot join a different room."""
+        await self._make_profile('sess_mismatch', 'room_1_2')
+        communicator = WebsocketCommunicator(build_application(), "/ws/chat/room_3_4/")
+        communicator.scope['user'] = None
+        communicator.scope['session'] = self._FakeSession('sess_mismatch')
+        connected, _ = await communicator.connect()
+        self.assertFalse(connected)
 
     async def test_connect_accepts(self):
         comm = await self._connect()

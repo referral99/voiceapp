@@ -1,0 +1,221 @@
+{% load i18n %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>
+        {% block head_title %}SpeakFluent{% endblock head_title %} — SpeakFluent
+    </title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'chat/css/style.css' %}">
+    <style>
+        /* ---------- Shared styling for all django-allauth pages ---------- */
+        .allauth-wrap {
+            width: 100%;
+            max-width: 480px;
+            margin: 0 auto;
+        }
+        .allauth-card {
+            background: rgba(255, 255, 255, 0.97);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            border-radius: 24px;
+            box-shadow: var(--shadow-lg);
+            padding: 36px 34px;
+        }
+
+        /* Headings & copy produced by allauth {% templatetag openblock %} element h1 {% templatetag closeblock %} etc. */
+        .allauth-card h1 {
+            margin: 0 0 6px;
+            font-size: 1.6em;
+            font-weight: 800;
+            color: var(--dark);
+        }
+        .allauth-card h2 {
+            margin: 18px 0 8px;
+            font-size: 1.1em;
+            font-weight: 700;
+            color: var(--dark);
+        }
+        .allauth-card > p,
+        .allauth-card form > p:first-child { color: var(--muted); }
+        .allauth-card p { color: var(--dark); font-size: 0.95em; line-height: 1.5; }
+        .allauth-card a { color: var(--primary); font-weight: 600; }
+
+        /* Forms + fields */
+        .allauth-card form { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+        .allauth-card form p { margin: 0 0 6px; display: flex; flex-direction: column; gap: 6px; }
+        .allauth-card label {
+            font-weight: 600;
+            font-size: 0.9em;
+            color: var(--dark);
+        }
+        .allauth-card input[type="text"],
+        .allauth-card input[type="email"],
+        .allauth-card input[type="password"],
+        .allauth-card input[type="tel"],
+        .allauth-card input[type="number"],
+        .allauth-card input:not([type]),
+        .allauth-card textarea {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 12px 14px;
+            border: 1.5px solid var(--border);
+            border-radius: 12px;
+            font-size: 1em;
+            font-family: inherit;
+            color: var(--dark);
+            background: #fff;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .allauth-card input:focus,
+        .allauth-card textarea:focus {
+            outline: none;
+            border-color: var(--primary-light);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+        }
+        .allauth-card input[type="checkbox"],
+        .allauth-card input[type="radio"] { width: auto; margin-right: 8px; }
+        .allauth-card input[type="checkbox"] + label,
+        .allauth-card input[type="radio"] + label { display: inline; font-weight: 500; }
+
+        /* Field help text & errors */
+        .allauth-card .helptext,
+        .allauth-card form span { color: var(--muted); font-size: 0.82em; }
+        .allauth-card ul.errorlist,
+        .allauth-card .errorlist {
+            list-style: none;
+            margin: 0 0 4px;
+            padding: 0;
+            color: #d63031;
+            font-size: 0.86em;
+            font-weight: 600;
+        }
+
+        /* Buttons & links rendered as buttons */
+        .allauth-card button,
+        .allauth-card [type="submit"],
+        .allauth-card a.button,
+        .allauth-card button[type="button"] {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: #fff;
+            border: none;
+            padding: 13px 18px;
+            border-radius: 12px;
+            font-size: 1em;
+            font-weight: 700;
+            font-family: inherit;
+            cursor: pointer;
+            width: 100%;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            box-sizing: border-box;
+            margin-top: 6px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .allauth-card button:hover,
+        .allauth-card [type="submit"]:hover,
+        .allauth-card a.button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 22px rgba(79, 70, 229, 0.4);
+        }
+
+        .allauth-card hr {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 22px 0;
+        }
+
+        /* Messages (success / info / error banners) */
+        .allauth-messages {
+            width: 100%;
+            max-width: 480px;
+            margin: 0 auto 16px;
+        }
+        .allauth-messages .msg {
+            background: rgba(255, 255, 255, 0.97);
+            border-left: 4px solid var(--primary);
+            border-radius: 12px;
+            padding: 12px 16px;
+            margin-bottom: 10px;
+            color: var(--dark);
+            font-size: 0.92em;
+            box-shadow: var(--shadow-lg);
+        }
+        .allauth-messages .msg.error { border-left-color: #d63031; }
+        .allauth-messages .msg.success { border-left-color: #2ecc71; }
+
+        /* Account management nav (shown when logged in) */
+        .allauth-foot {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 0.88em;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        .allauth-foot a { color: #fff; font-weight: 600; margin: 0 6px; }
+    </style>
+    {% block extra_head %}
+    {% endblock extra_head %}
+</head>
+<body>
+<div class="hero-bg">
+
+    <!-- Top navigation -->
+    <nav class="topbar">
+        <div class="brand">
+            <span class="logo-mark">🗣️</span>
+            <span>SpeakFluent</span>
+        </div>
+        <div class="wallet-info">
+            <a href="{% url 'home' %}" class="btn-premium" style="background:rgba(255,255,255,0.18);color:#fff;box-shadow:none;border:1px solid rgba(255,255,255,0.3);">← Back to Home</a>
+        </div>
+    </nav>
+
+    <header class="hero-head">
+        <span class="eyebrow">Your Account</span>
+        <h1>Speak<span class="accent">Fluent</span></h1>
+    </header>
+
+    {% block body %}
+        {% if messages %}
+            <div class="allauth-messages">
+                {% for message in messages %}
+                    <div class="msg {{ message.tags }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <main class="allauth-wrap">
+            <div class="allauth-card">
+                {% block content %}
+                {% endblock content %}
+            </div>
+
+            {% if user.is_authenticated %}
+                <div class="allauth-foot">
+                    {% url 'account_email' as email_url_ %}
+                    {% if email_url_ %}<a href="{{ email_url_ }}">{% trans "Change Email" %}</a>{% endif %}
+                    {% url 'account_change_password' as change_password_url_ %}
+                    {% if change_password_url_ %}<a href="{{ change_password_url_ }}">{% trans "Change Password" %}</a>{% endif %}
+                    {% url 'socialaccount_connections' as connections_url_ %}
+                    {% if connections_url_ %}<a href="{{ connections_url_ }}">{% trans "Connections" %}</a>{% endif %}
+                    {% url 'account_logout' as logout_url_ %}
+                    {% if logout_url_ %}<a href="{{ logout_url_ }}">{% trans "Sign Out" %}</a>{% endif %}
+                </div>
+            {% endif %}
+        </main>
+    {% endblock body %}
+
+    {% block extra_body %}
+    {% endblock extra_body %}
+
+    {% include "chat/_policy_footer.html" %}
+
+</div>
+</body>
+</html>

@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .Python
+command.txt
 
 # Virtual environments
 venv/
@@ -11,6 +12,7 @@ env/
 
 # Django
 *.log
+/anonymous_connect/activity_logs/
 db.sqlite3
 db.sqlite3-journal
 /anonymous_connect/staticfiles/
@@ -19,6 +21,9 @@ db.sqlite3-journal
 .env
 *.env
 !.env.example
+Secrets
+*.pem
+*.key
 
 # Editor / OS
 .idea/

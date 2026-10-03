@@ -9,6 +9,7 @@ from django.contrib.auth import login
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
+from django.db import connection, transaction
 from django.core.mail import send_mail
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
@@ -22,6 +23,8 @@ from .models import (
     PREMIUM_DAILY_PRICE_INR,
     PREMIUM_DAILY_PRICE_USD,
 )
+
+from activity_logging import Action, log_event
 
 logger = logging.getLogger(__name__)
 
@@ -103,10 +106,27 @@ def home(request):
 
         profile.save()
 
+        # --- Activity logging: record which preferences the user selected. ---
+        # Only log fields the user actually submitted so the report reflects
+        # real selections rather than defaults.
+        if request.POST.get('age'):
+            log_event(Action.AGE_SELECTED, request=request, profile=profile,
+                      age=profile.age)
+        if request.POST.get('sex'):
+            log_event(Action.GENDER_SELECTED, request=request, profile=profile,
+                      gender=profile.sex)
+        if request.POST.get('profession'):
+            log_event(Action.PROFESSION_SELECTED, request=request, profile=profile,
+                      profession=profile.profession)
+
         # Check if the user clicked one of the "Connect" buttons
         mode = request.POST.get('connection_mode')
         if mode in ['chat', 'voice']:
             return redirect('match_user', mode=mode, name=profile.display_name)
+
+    else:
+        # GET request -> this is a site visit. Record IP + date/time.
+        log_event(Action.VISIT, request=request, profile=profile)
 
     context = {'profile': profile}
     context.update(profile_display_context(request))
@@ -139,8 +159,13 @@ def _pair_profiles(profile, match):
     profile.status = Status.Busy
     match.active_room_name = room_name
     match.status = Status.Busy
-    profile.save()
-    match.save()
+    # Write only the columns that actually changed to keep the UPDATE small.
+    profile.save(update_fields=[
+        'active_room_name', 'status', 'last_connected_session',
+    ])
+    match.save(update_fields=[
+        'active_room_name', 'status', 'last_connected_session',
+    ])
 
     return room_name
 
@@ -172,18 +197,56 @@ def _find_last_partner_if_searching(profile):
     return partner
 
 
+# How many online candidates to sample when picking a random partner. Keeping
+# this small turns matchmaking into an index range-scan + tiny in-Python random
+# pick instead of a full-table ``ORDER BY RANDOM()`` sort, which scales badly as
+# the online pool grows.
+_MATCH_SAMPLE_SIZE = 25
+
+
+def _apply_premium_filters(queryset, profile):
+    """Narrow the candidate pool by the premium member's preferences.
+
+    Each filter is applied only when it still leaves at least one candidate, so
+    a premium member is never stranded with zero matches. ``.exists()`` is used
+    (cheap ``LIMIT 1``) rather than evaluating the whole queryset.
+    """
+    if profile.pref_sex and profile.pref_sex != 'any':
+        filtered = queryset.filter(sex=profile.pref_sex)
+        if filtered.exists():
+            queryset = filtered
+    if profile.pref_profession and profile.pref_profession != 'any':
+        filtered = queryset.filter(profession=profile.pref_profession)
+        if filtered.exists():
+            queryset = filtered
+    if profile.pref_age_min and profile.pref_age_min > 0:
+        # "Age greater than": the candidate's age must meet the minimum.
+        # Candidates with no age recorded are excluded by age__gte.
+        filtered = queryset.filter(age__gte=profile.pref_age_min)
+        if filtered.exists():
+            queryset = filtered
+    return queryset
+
+
 def _find_and_pair_match(profile, prefer_last_partner=False):
     """Mark the profile online, find a partner, and pair both into a room.
 
     When ``prefer_last_partner`` is set, the previous partner is chosen first if
     they are also searching again; otherwise a random online user is picked.
 
+    Concurrency: the whole "pick a candidate and claim it" step runs inside a
+    single DB transaction and locks the chosen rows with ``select_for_update``.
+    ``skip_locked`` means two users searching at the same time never fight over
+    (or block on) the same candidate - each simply skips rows another matcher is
+    already claiming. This removes the previous race where two people could both
+    match the same partner.
+
     Returns the matched ``UserProfile`` and the shared room name, or
     ``(None, None)`` when nobody is currently available.
     """
-    # Mark current user as searching.
+    # Mark current user as searching (only the one column needs writing).
     profile.status = Status.Online
-    profile.save()
+    profile.save(update_fields=['status'])
 
     # Prefer the last partner when asked and they are searching again.
     if prefer_last_partner:
@@ -192,33 +255,48 @@ def _find_and_pair_match(profile, prefer_last_partner=False):
             room_name = _pair_profiles(profile, last_partner)
             return last_partner, room_name
 
-    # Look for others who are online. Exclude the current user.
-    potential_matches = UserProfile.objects.filter(status=Status.Online).exclude(id=profile.id)
+    with transaction.atomic():
+        # Base pool: everyone currently online except this user.
+        candidates = (
+            UserProfile.objects
+            .filter(status=Status.Online)
+            .exclude(id=profile.id)
+        )
 
-    # Premium members can narrow the pool by sex, profession, and minimum age.
-    # Each filter is only applied if it still leaves at least one candidate, so
-    # premium members never get stranded with zero matches.
-    if profile.premium_active:
-        if profile.pref_sex and profile.pref_sex != 'any':
-            filtered = potential_matches.filter(sex=profile.pref_sex)
-            if filtered.exists():
-                potential_matches = filtered
-        if profile.pref_profession and profile.pref_profession != 'any':
-            filtered = potential_matches.filter(profession=profile.pref_profession)
-            if filtered.exists():
-                potential_matches = filtered
-        if profile.pref_age_min and profile.pref_age_min > 0:
-            # "Age greater than" preference: the candidate's age must meet the
-            # minimum. Candidates with no age recorded are excluded by age__gte.
-            filtered = potential_matches.filter(age__gte=profile.pref_age_min)
-            if filtered.exists():
-                potential_matches = filtered
+        if profile.premium_active:
+            candidates = _apply_premium_filters(candidates, profile)
 
-    match = potential_matches.order_by('?').first()
-    if not match:
-        return None, None
+        # Pull a bounded window of candidate ids and pick one at random in
+        # Python. This avoids ``ORDER BY RANDOM()`` over the full table while
+        # still giving a non-deterministic partner. ``order_by('id')`` keeps the
+        # range scan on the primary-key / status index.
+        candidate_ids = list(
+            candidates.order_by('id').values_list('id', flat=True)[:_MATCH_SAMPLE_SIZE]
+        )
+        if not candidate_ids:
+            return None, None
 
-    room_name = _pair_profiles(profile, match)
+        chosen_id = random.choice(candidate_ids)
+
+        # Re-fetch the chosen row and claim it atomically. On backends that
+        # support row locking (Postgres) we use ``select_for_update`` with
+        # ``skip_locked`` so two users searching simultaneously never grab the
+        # same partner and never block on each other. SQLite (used in dev/tests)
+        # doesn't support this and serialises writes anyway, so we fall back to
+        # a plain locked-by-transaction read there.
+        match_qs = UserProfile.objects.filter(id=chosen_id, status=Status.Online)
+        if connection.features.has_select_for_update:
+            match_qs = match_qs.select_for_update(
+                skip_locked=connection.features.has_select_for_update_skip_locked,
+            )
+        match = match_qs.first()
+        if not match:
+            # Someone claimed it between the sample and the lock - treat as no
+            # match this round; the caller's polling will retry.
+            return None, None
+
+        room_name = _pair_profiles(profile, match)
+
     return match, room_name
 
 
@@ -229,6 +307,10 @@ def _call_timer(profile):
 
 def match_user(request, mode, name):
     profile = get_user_profile(request)
+
+    # --- Activity logging: a call attempt (text or voice depending on mode). ---
+    _action = Action.VOICE_CALL_ATTEMPT if mode == 'voice' else Action.MSG_CALL_ATTEMPT
+    log_event(_action, request=request, profile=profile, mode=mode, kind='match')
 
     # Lapse expired premium / reset daily counters before matching.
     profile.reset_daily_counters_if_needed()
@@ -285,6 +367,12 @@ def reconnect_user(request, mode, name):
     # must not be counted or re-checked again - they only keep looking for the
     # previous partner (or any partner) to become available.
     is_polling = request.GET.get('polling') == '1'
+
+    # --- Activity logging: reconnect = another call attempt. Skip automatic
+    # polling retries so each record is a real user-initiated attempt. ---
+    if not is_polling:
+        _action = Action.VOICE_CALL_ATTEMPT if mode == 'voice' else Action.MSG_CALL_ATTEMPT
+        log_event(_action, request=request, profile=profile, mode=mode, kind='reconnect')
 
     # Reset the daily reconnect counter at the start of a new calendar day so
     # the free allowance refreshes once per day.
@@ -446,6 +534,10 @@ def premium_page(request):
     """Wallet and UPI/card payment page. Creates a server-side Razorpay order."""
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
 
+    # --- Activity logging: landing here means the user clicked "Premium". ---
+    log_event(Action.PREMIUM_CLICK, request=request, profile=profile,
+              already_premium=profile.premium_active)
+
     # Lapse any expired premium so the page reflects reality.
     profile.reset_daily_counters_if_needed()
 
@@ -524,6 +616,9 @@ def payment_success(request):
         })
     except razorpay.errors.SignatureVerificationError:
         logger.warning("Razorpay signature verification FAILED for order %s", order_id)
+        # --- Activity logging: payment attempt failed verification. ---
+        log_event(Action.PREMIUM_PAYMENT_FAILED, request=request,
+                  order_id=order_id, reason='signature_verification_failed')
         # Mark the transaction as failed if we know about it.
         Transaction.objects.filter(razorpay_order_id=order_id).update(status='Failed')
         messages.error(request, 'Payment verification failed. You have not been charged for premium.')
@@ -559,6 +654,11 @@ def payment_success(request):
             razorpay_payment_id=payment_id,
             status='Success',
         )
+
+    # --- Activity logging: a successful premium payment. ---
+    log_event(Action.PREMIUM_PAID, request=request, profile=profile,
+              order_id=order_id, payment_id=payment_id,
+              amount=(txn.amount if txn else None))
 
     messages.success(request, 'Premium unlocked for today! Enjoy filtered, unlimited matching.')
     return redirect('home')

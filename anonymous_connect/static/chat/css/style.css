@@ -445,14 +445,29 @@ input::placeholder { color: #94a3b8; }
 .modal-content h2 { margin-top: 0; }
 .modal-buttons { margin-top: 24px; display: flex; flex-direction: column; gap: 12px; }
 .btn-skip {
-    background: none;
-    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 28px;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #f8fafc;
     color: var(--muted);
     cursor: pointer;
-    text-decoration: underline;
+    text-decoration: none;
     font-size: 0.95em;
+    font-weight: 600;
     font-family: inherit;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
 }
+.btn-skip:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+    color: #334155;
+}
+/* Give the Cancel button breathing room from the paragraph above it in the
+   "finding a partner" overlay. The modal variant relies on .modal-buttons gap. */
+.searching-overlay .btn-skip { margin-top: 20px; }
 
 /* ---------- Searching state ---------- */
 .searching-overlay .modal-content { max-width: 460px; }

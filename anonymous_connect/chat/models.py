@@ -38,7 +38,12 @@ class UserProfile(models.Model):
     display_name = models.CharField(max_length=50, default="Anonymous")
 
     active_room_name = models.CharField(max_length=255, null=True, blank=True)
-    status = models.CharField(max_length=10, choices=Status.choices, null=True, blank=True, default=Status.Offline)
+    # Indexed: matchmaking filters every candidate query on ``status`` so an
+    # index turns the online-pool lookup into a quick index scan.
+    status = models.CharField(
+        max_length=10, choices=Status.choices, null=True, blank=True,
+        default=Status.Offline, db_index=True,
+    )
 
     # --- Basic User Details ---
     age = models.PositiveIntegerField(null=True, blank=True)

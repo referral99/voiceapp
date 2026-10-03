@@ -1,4 +1,4 @@
-git congig --global u#!/usr/bin/env bash
+#!/usr/bin/env bash
 # ---------------------------------------------------------------------------
 # Finish deployment of Anonymous Connect on Amazon Linux 2023.
 # Idempotent: safe to re-run. Assumes system packages, Postgres, Redis, the
@@ -20,6 +20,16 @@ WWW_DOMAIN=www.$DOMAIN
 # Email used by Let's Encrypt for expiry notices. Override by exporting
 # CERTBOT_EMAIL before running this script.
 CERTBOT_EMAIL=${CERTBOT_EMAIL:-admin@$DOMAIN}
+
+# --- Razorpay (payment gateway) ---
+# The live key id/secret from the Razorpay dashboard. Export these before
+# running the script so they get written into the production .env, e.g.:
+#   export RAZOR_KEY_ID=rzp_live_xxxxxxxx
+#   export RAZOR_KEY_SECRET=yyyyyyyyyyyyyyyy
+# If left unset the script keeps whatever is already in the existing .env so a
+# re-run never silently wipes working keys.
+RAZOR_KEY_ID=${RAZOR_KEY_ID:-$(sudo awk -F= '/^RAZOR_KEY_ID=/{print $2; exit}' "$APP_DIR/.env" 2>/dev/null || true)}
+RAZOR_KEY_SECRET=${RAZOR_KEY_SECRET:-$(sudo awk -F= '/^RAZOR_KEY_SECRET=/{print $2; exit}' "$APP_DIR/.env" 2>/dev/null || true)}
 # Set ENABLE_TLS=0 to skip the Certbot/HTTPS step (e.g. before DNS points at
 # this box). The app will then be served over plain HTTP on the domain/IP.
 ENABLE_TLS=${ENABLE_TLS:-1}
@@ -78,6 +88,9 @@ SECURE_SSL_REDIRECT=$SSL_REDIRECT
 SECURE_HSTS_SECONDS=$HSTS_SECONDS
 
 ACCOUNT_EMAIL_VERIFICATION=optional
+
+RAZOR_KEY_ID=$RAZOR_KEY_ID
+RAZOR_KEY_SECRET=$RAZOR_KEY_SECRET
 ENVEOF
 chmod 600 "$APP_DIR/.env"
 

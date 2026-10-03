@@ -1,9 +1,11 @@
 import json
+import time
 
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 
 from .models import UserProfile, Status
+from activity_logging import Action, log_event
 
 
 class ChatConsumer(AsyncWebsocketConsumer):
@@ -16,10 +18,50 @@ class ChatConsumer(AsyncWebsocketConsumer):
         # Identify the user (registered or guest).
         self.profile = await self.get_profile()
 
+        # --- Authorization ---
+        # Room names are predictable (room_<minId>_<maxId>), so without a check
+        # any client could join an active call's room and receive its chat /
+        # WebRTC signalling. Only allow the connection when this profile was
+        # actually paired into THIS room (its active_room_name matches). Reject
+        # everyone else before accepting the socket.
+        if not await self.is_authorized_for_room():
+            await self.close(code=4403)
+            return
+
+        # Mark when this session (call/room connection) began so we can report
+        # how long the user stayed when they disconnect.
+        self.connected_at = time.monotonic()
+
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
+        self.accepted = True
         await self.accept()
 
+        # --- Activity logging: a session (room connection) started. ---
+        log_event(
+            Action.SESSION_START,
+            profile=self.profile,
+            room=self.room_name,
+        )
+
     async def disconnect(self, close_code):
+        # If the socket was rejected during connect() (failed authorization),
+        # it never joined the group or logged a session start, so there is
+        # nothing to clean up or notify. Bail out early.
+        if not getattr(self, 'accepted', False):
+            return
+
+        # --- Activity logging: session ended; report how long they stayed. ---
+        duration_seconds = None
+        if getattr(self, 'connected_at', None) is not None:
+            duration_seconds = round(time.monotonic() - self.connected_at, 1)
+        log_event(
+            Action.SESSION_END,
+            profile=getattr(self, 'profile', None),
+            room=getattr(self, 'room_name', None),
+            duration_seconds=duration_seconds,
+            close_code=close_code,
+        )
+
         # Notify the OTHER user that the call is ending.
         if hasattr(self, 'room_group_name'):
             await self.channel_layer.group_send(
@@ -51,6 +93,18 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'offer', 'answer', 'ice-candidate',
             'call-request', 'call-accept', 'call-reject', 'call-hangup',
         ):
+            # --- Activity logging: voice-call control events. ---
+            # The chat->voice escalation buttons send these control messages, so
+            # they mark voice-call activity (request/accept/reject/hangup).
+            if msg_type in ('call-request', 'call-accept', 'call-reject', 'call-hangup'):
+                log_event(
+                    Action.VOICE_CALL_ATTEMPT,
+                    profile=self.profile,
+                    room=self.room_name,
+                    kind='signal',
+                    signal=msg_type,
+                )
+
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
@@ -122,6 +176,26 @@ class ChatConsumer(AsyncWebsocketConsumer):
         }))
 
     # --- Database helpers ---
+
+    @database_sync_to_async
+    def is_authorized_for_room(self):
+        """True only if the current profile was paired into this exact room.
+
+        Matchmaking (see chat.views._pair_profiles) sets ``active_room_name`` on
+        both paired profiles to the shared room. We require that the connecting
+        profile exists and its ``active_room_name`` equals the room it is trying
+        to join, so a stranger cannot open an arbitrary ``ws/chat/<room>/`` and
+        eavesdrop on someone else's call.
+        """
+        profile = self.profile
+        if profile is None:
+            return False
+        # Re-read the current value from the DB rather than trusting a possibly
+        # stale in-memory copy.
+        fresh = UserProfile.objects.filter(pk=profile.pk).first()
+        if not fresh:
+            return False
+        return fresh.active_room_name == self.room_name
 
     @database_sync_to_async
     def get_profile(self):

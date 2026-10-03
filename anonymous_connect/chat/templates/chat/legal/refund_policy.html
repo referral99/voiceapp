@@ -1,0 +1,45 @@
+{% extends "chat/legal/base_legal.html" %}
+
+{% block page_title %}Cancellation & Refund Policy{% endblock %}
+{% block page_desc %}SpeakFluent cancellation and refund terms for Premium purchases.{% endblock %}
+{% block heading %}Cancellation &amp; Refund Policy{% endblock %}
+
+{% block content %}
+<p>This policy explains how cancellations and refunds work for SpeakFluent Premium purchases.</p>
+
+<h2>1. Nature of the product</h2>
+<p>SpeakFluent Premium is a digital daily pass that is activated immediately on successful
+payment and remains valid until the next local midnight. Because access is granted instantly,
+the pass is generally non-refundable once activated.</p>
+
+<h2>2. Cancellation</h2>
+<p>The Premium pass is a one-time daily purchase and does not auto-renew, so there is no
+recurring subscription to cancel. You simply choose not to purchase again. You may stop using
+the service at any time.</p>
+
+<h2>3. Refund eligibility</h2>
+<p>We offer refunds only in the following cases:</p>
+<ul>
+    <li>You were charged but Premium was not activated due to a verified technical error on our side.</li>
+    <li>You were charged more than once for the same pass (duplicate transaction).</li>
+    <li>A payment was processed in error and the service was not used.</li>
+</ul>
+
+<h2>4. How to request a refund</h2>
+<p>Email us within 7 days of the transaction with your registered email and the Razorpay
+payment/order ID. We will review and respond within 3–5 business days.</p>
+<div class="contact-block">
+    Refund requests: <a href="mailto:support@speakfluent.example">support@speakfluent.example</a><br>
+    Phone: +91-XXXXXXXXXX
+</div>
+
+<h2>5. Refund processing</h2>
+<p>Approved refunds are returned to the original payment method via Razorpay. Once processed,
+it typically takes 5–7 business days for the amount to reflect in your account, depending on
+your bank or payment provider.</p>
+
+<h2>6. Contact</h2>
+<p>For any billing questions, visit our <a href="{% url 'contact_us' %}">Contact Us</a> page.</p>
+<p class="legal-note">Note: Replace the placeholder email, phone, and timelines with your real
+details and policy before submitting for Razorpay activation.</p>
+{% endblock %}

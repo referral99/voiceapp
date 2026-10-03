@@ -11,6 +11,31 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def load_dotenv(path):
+    """Minimal, dependency-free .env loader.
+
+    Reads simple KEY=VALUE lines from a .env file (if present) into the process
+    environment, without overriding variables that are already set. Supports
+    '#' comments and optional surrounding quotes. Real OS/platform environment
+    variables always win, so production config is unaffected.
+    """
+    if not path.exists():
+        return
+    for raw_line in path.read_text(encoding='utf-8').splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        key, _, value = line.partition('=')
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+# Load a local .env file (ignored by git) before reading any settings below.
+load_dotenv(BASE_DIR / '.env')
+
+
 def env_bool(name, default=False):
     return os.environ.get(name, str(default)).lower() in ('1', 'true', 'yes', 'on')
 
@@ -181,6 +206,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 RAZOR_KEY_ID = os.environ.get('RAZOR_KEY_ID', '')
 RAZOR_KEY_SECRET = os.environ.get('RAZOR_KEY_SECRET', '')
 
+# Twilio (OTP SMS). Leave blank to fall back to logging the OTP (dev mode).
+TWILIO_SID = os.environ.get('TWILIO_SID', '')
+TWILIO_TOKEN = os.environ.get('TWILIO_TOKEN', '')
+TWILIO_FROM = os.environ.get('TWILIO_FROM', '')
+
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = 'home'
@@ -212,19 +242,20 @@ SOCIALACCOUNT_PROVIDERS = {
 }
 
 # --- Email backend ---
-# Console backend locally (prints emails to the log); SMTP in production when
-# EMAIL_HOST is configured via environment variables.
-if os.environ.get('EMAIL_HOST'):
-    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-    EMAIL_HOST = os.environ.get('EMAIL_HOST')
-    EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
-    EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
-    EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
-    EMAIL_USE_TLS = env_bool('EMAIL_USE_TLS', True)
-    DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
-else:
+# Sends real OTP / verification emails over Gmail SMTP. Credentials default to
+# the working Gmail App Password account and can be overridden via env vars.
+# Set EMAIL_BACKEND=console (env var) to print emails to the log instead.
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = env_bool('EMAIL_USE_TLS', True)
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'noreply.chatsanti@gmail.com')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', 'zbwc idxj qxlv oina')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
+
+if os.environ.get('EMAIL_BACKEND') == 'console':
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-    DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'no-reply@anonymous-connect.local')
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 
 
 # Production security hardening (enabled automatically when DEBUG is off).

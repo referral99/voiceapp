@@ -1,0 +1,54 @@
+{% extends "chat/legal/base_legal.html" %}
+
+{% block page_title %}Terms & Conditions{% endblock %}
+{% block page_desc %}The terms that govern your use of SpeakFluent.{% endblock %}
+{% block heading %}Terms &amp; Conditions{% endblock %}
+
+{% block content %}
+<p>These Terms &amp; Conditions ("Terms") govern your access to and use of SpeakFluent
+("the service"). By using the service you agree to these Terms. If you do not agree, please
+do not use the service.</p>
+
+<h2>1. The service</h2>
+<p>SpeakFluent is a digital platform that pairs users for live English-speaking practice via
+real-time text chat and peer-to-peer voice calls. A paid Premium pass unlocks additional
+features such as match filtering, unlimited call duration, and reconnecting with partners.</p>
+
+<h2>2. Eligibility</h2>
+<p>You must be at least 18 years old, or the age of majority in your jurisdiction, to use the
+service. By using SpeakFluent you confirm that you meet this requirement.</p>
+
+<h2>3. Acceptable use</h2>
+<ul>
+    <li>Be respectful. Harassment, hate speech, threats, or sharing of illegal content is prohibited.</li>
+    <li>Do not record other users without consent or misuse their personal information.</li>
+    <li>Do not attempt to disrupt, reverse-engineer, or gain unauthorised access to the service.</li>
+</ul>
+<p>We may suspend or terminate accounts that violate these Terms.</p>
+
+<h2>4. Premium subscription and payments</h2>
+<p>Premium is offered as a daily pass priced in Indian Rupees (INR) and valid until the next
+local midnight. Payments are processed securely through Razorpay. By purchasing, you authorise
+the charge for the stated amount. See our
+<a href="{% url 'refund_policy' %}">Cancellation &amp; Refund Policy</a> and
+<a href="{% url 'service_fulfillment' %}">Service Fulfillment</a> pages for details.</p>
+
+<h2>5. Intellectual property</h2>
+<p>All content, branding, and software of SpeakFluent are owned by us or our licensors and may
+not be copied or reused without permission.</p>
+
+<h2>6. Disclaimer and limitation of liability</h2>
+<p>The service is provided "as is" without warranties of any kind. We are not liable for
+interactions between users or for any indirect or consequential damages arising from use of
+the service, to the maximum extent permitted by law.</p>
+
+<h2>7. Governing law</h2>
+<p>These Terms are governed by the laws of India, and any disputes are subject to the
+jurisdiction of the courts at [Your City, State].</p>
+
+<h2>8. Contact</h2>
+<p>Questions about these Terms? Reach us via the
+<a href="{% url 'contact_us' %}">Contact Us</a> page.</p>
+<p class="legal-note">Note: Replace the bracketed placeholders with your real business
+details and jurisdiction before submitting for Razorpay activation.</p>
+{% endblock %}

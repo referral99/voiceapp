@@ -1,0 +1,60 @@
+{% extends "chat/legal/base_legal.html" %}
+
+{% block page_title %}Privacy Policy{% endblock %}
+{% block page_desc %}How SpeakFluent collects, uses, and protects your personal information.{% endblock %}
+{% block heading %}Privacy Policy{% endblock %}
+
+{% block content %}
+<p>This Privacy Policy explains how SpeakFluent ("we", "us", "our") collects, uses, and
+protects your information when you use our website and services. By using SpeakFluent you
+agree to the practices described below.</p>
+
+<h2>1. Information we collect</h2>
+<ul>
+    <li><strong>Account information:</strong> your email address and a display name when you sign in via email OTP or Google.</li>
+    <li><strong>Profile details you provide:</strong> name, age, gender, and profession used for matchmaking.</li>
+    <li><strong>Usage data:</strong> session identifiers, matchmaking activity, and basic technical logs.</li>
+    <li><strong>Payment information:</strong> processed securely by our payment partner Razorpay. We store only transaction references (order ID, payment ID, amount, status) and never your full card or UPI credentials.</li>
+</ul>
+
+<h2>2. How we use your information</h2>
+<ul>
+    <li>To pair you with conversation partners and operate voice/chat sessions.</li>
+    <li>To provide and manage Premium subscriptions and verify payments.</li>
+    <li>To authenticate your login and keep your account secure.</li>
+    <li>To improve, maintain, and troubleshoot the service.</li>
+</ul>
+
+<h2>3. Voice and chat content</h2>
+<p>Voice calls are peer-to-peer (WebRTC); audio is not recorded or stored by us. Chat
+messages are relayed in real time to connect you with your partner and are not retained
+after the session for marketing purposes.</p>
+
+<h2>4. Sharing of information</h2>
+<p>We do not sell your personal information. We share data only with service providers who
+help us run the platform, such as our payment processor (Razorpay) and infrastructure
+providers, and only to the extent needed to deliver the service or comply with law.</p>
+
+<h2>5. Data retention and security</h2>
+<p>We retain personal data only as long as necessary to provide the service and meet legal
+obligations. We use reasonable technical and organisational measures to protect your data,
+though no method of transmission over the internet is completely secure.</p>
+
+<h2>6. Your rights</h2>
+<p>You may request access to, correction of, or deletion of your personal data by contacting
+us using the details on our <a href="{% url 'contact_us' %}">Contact Us</a> page.</p>
+
+<h2>7. Changes to this policy</h2>
+<p>We may update this Privacy Policy from time to time. The latest version will always be
+available on this page with its revised date.</p>
+
+<h2>8. Contact</h2>
+<div class="contact-block">
+    <strong>[Your Registered Business / Owner Name]</strong><br>
+    Email: <a href="mailto:support@speakfluent.example">support@speakfluent.example</a><br>
+    Phone: +91-XXXXXXXXXX<br>
+    Address: [Your full physical business address]
+</div>
+<p class="legal-note">Note: Replace the bracketed placeholders above with your real,
+accurate business details before submitting for Razorpay activation.</p>
+{% endblock %}

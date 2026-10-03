@@ -116,8 +116,9 @@ Razorpay payment record: `user`, `amount`, `razorpay_order_id`, `razorpay_paymen
 
 ### Pricing constants (module-level)
 - `PREMIUM_DAILY_PRICE_INR = 10`, `PREMIUM_RECONNECT_LIMIT = 5`, `FREE_RECONNECT_LIMIT = 1`.
+- `views.py` derives `PREMIUM_PRICE_INR = PREMIUM_DAILY_PRICE_INR`, so the whole app charges one consistent daily price.
 
-> ⚠️ **Known inconsistency to be aware of before editing premium logic:** the *model layer* is designed around **daily** premium (`premium_expiry`, `premium_active`, daily counter resets, `PREMIUM_DAILY_PRICE_INR = 10`). But the *view layer* (`views.py`) charges a **flat ₹500** (`PREMIUM_PRICE_INR = 500`), sets `is_premium = True` **permanently** and never sets `premium_expiry`. Matchmaking checks the raw `profile.is_premium` flag, **not** `premium_active`, and `reset_daily_counters_if_needed()` is never called. So today premium is effectively a one-time permanent upgrade. If you want true daily premium, that gap in `views.py` is where to fix it.
+> **Premium is a DAILY pass (as of the latest fix).** The model and the views now agree: buying premium sets `premium_expiry = next_midnight()` and premium is checked everywhere via the `premium_active` property (not the raw `is_premium` flag). Every entry point (`match_user`, `reconnect_user`, `premium_page`, `connect_last_user`) calls `reset_daily_counters_if_needed()` first, which lapses expired premium and resets the daily reconnect counter. To change premium duration, edit `UserProfile.next_midnight()` / `premium_expiry`; to change the price, edit `PREMIUM_DAILY_PRICE_INR` in `models.py`.
 
 ---
 
@@ -200,13 +201,13 @@ When `call.html` loads it opens `ws(s)://<host>/ws/chat/<room_name>/`.
 - If the *other* side drops, this side receives `call_ended`, shows "Partner Disconnected", and redirects home after 3 seconds.
 
 ### 6.3 Authentication
-- **Mobile OTP (custom):** `login.html` → POST to `send_otp` → a random 6-digit code is stored in the session and **logged** (no SMS gateway wired yet; Twilio is a dependency placeholder). `verify_otp` compares the entered code to the session code; on success it `get_or_create`s a user named `user_<mobile>` and logs them in.
+- **Mobile OTP (custom):** `login.html` → POST to `send_otp` → a random 6-digit code is stored in the session and **sent via Twilio SMS** (`_send_sms_otp()` using `TWILIO_SID/TOKEN/FROM`). If Twilio isn't configured, it gracefully falls back to **logging** the code (dev mode) and the verify page shows a hint. `verify_otp` compares the entered code to the session code; on success it `get_or_create`s a user named `user_<mobile>` and logs them in.
 - **Google (allauth):** `custom_login` routes the "email" method to `/accounts/google/login/` **only if** a Google `SocialApp` is configured (otherwise the button is disabled, avoiding a 500). Configure the Google provider via the Django admin / allauth.
 
 ### 6.4 Premium purchase (Razorpay)
-1. `premium_page` (login required): if Razorpay keys exist and the user isn't premium, it creates a **server-side order** for ₹500 (`50000` paise) and records a `Pending` `Transaction`. Renders `payment.html`.
+1. `premium_page` (login required): first lapses expired premium via `reset_daily_counters_if_needed()`. If Razorpay keys exist and the user isn't currently `premium_active`, it creates a **server-side order** for the daily price (`PREMIUM_DAILY_PRICE_INR`, in paise) and records a `Pending` `Transaction`. Renders `payment.html`.
 2. `payment.html` loads Razorpay Checkout. On success, the gateway returns `order_id`, `payment_id`, `signature`, which the page POSTs to `payment_success`.
-3. `payment_success` (login required, POST): **verifies the signature server-side** with the Razorpay secret. On success it sets `is_premium=True`, credits `wallet_balance += 500`, and marks the transaction `Success` (guarding against double-crediting duplicate callbacks). On failure it marks the transaction `Failed` and never upgrades. **The client is never trusted to self-report success.**
+3. `payment_success` (login required, POST): **verifies the signature server-side** with the Razorpay secret. On success it sets `is_premium=True` and `premium_expiry = next_midnight()` (a **daily pass**), and marks the transaction `Success` (guarding against reprocessing duplicate callbacks). On failure it marks the transaction `Failed` and never upgrades. **The client is never trusted to self-report success.**
 
 ---
 
@@ -284,15 +285,15 @@ Registered models: `UserProfile` (list/filter/search on premium, sex, profession
 
 ## 12. Gotchas & current limitations (read before changing behaviour)
 
-- **Premium is effectively permanent, not daily** — see the inconsistency note in §4. The daily-premium machinery exists in the model but is not invoked by the views.
+- **Premium is a daily pass** — purchase sets `premium_expiry = next_midnight()`; it lapses at midnight. All checks use `premium_active` (see §4). ✅ (fixed)
 - **Matchmaking is retry-by-reload**, not push. A searching user's browser reloads `match_user` every 3 seconds. There is no live "waiting pool" notification.
 - **Single-process channel layer in dev** — cross-worker messaging needs Redis (§8).
-- **OTP is not actually sent** — the 6-digit code is written to the application log only. Wire Twilio (already a dependency) in `send_otp` to send real SMS.
+- **OTP sends via Twilio when configured** — set `TWILIO_SID/TOKEN/FROM` for real SMS; otherwise the code is logged (dev fallback) and the verify page shows a hint. ✅ (fixed)
 - **No real match "lock"** — two near-simultaneous searchers could in theory both pick the same partner; matching relies on quick DB status flips rather than a transaction/lock.
 - **`main.js` voice code is a stub** — the real WebRTC implementation, chat bubbles, ticks, and the chat→voice handshake all live inline in `call.html`. Edit `call.html` for call/chat UI behaviour.
 - **Read ticks are "delivered + read", not three-state** — a message shows single grey ✓ on send and blue double ✓✓ once the partner's browser receives it and returns a `read_receipt`. There is no separate "delivered but not yet seen" state, since the receipt is sent as soon as the message arrives in the room.
 - **STUN only, no TURN** — voice uses only Google's public STUN server. Peers behind symmetric NATs/strict firewalls may fail to connect; add a TURN server for reliability.
-- **`age`/`pref_age_min` are stored but not used in matching** — the age-group preference is modelled but not applied in `match_user`.
+- **Age preference is now applied** — premium users' `pref_age_min` filters the pool via `age__gte` in `_find_and_pair_match` (alongside `pref_sex`/`pref_profession`), each filter applied only if it leaves at least one candidate. The home form exposes an "Age greater than" selector. ✅ (fixed)
 
 ---
 

@@ -8,8 +8,12 @@ urlpatterns = [
     path('hangup/', views.hangup_view, name='hangup_view'),
 
     path('login/', views.custom_login, name='login'),
-    path('send-otp/', views.send_otp, name='send_otp'),
-    path('verify-otp/', views.verify_otp, name='verify_otp'),
+    # Email OTP login (active)
+    path('send-email-otp/', views.send_email_otp, name='send_email_otp'),
+    path('verify-email-otp/', views.verify_email_otp, name='verify_email_otp'),
+    # Mobile OTP login (temporarily disabled - see views.py)
+    # path('send-otp/', views.send_otp, name='send_otp'),
+    # path('verify-otp/', views.verify_otp, name='verify_otp'),
 
     # Allauth URLs (handles Google/Email callbacks)
     path('accounts/', include('allauth.urls')),
@@ -31,4 +35,11 @@ urlpatterns = [
 
     # Health / readiness probe for cloud platforms
     path('healthz/', views.healthz, name='healthz'),
+
+    # Mandatory policy pages (linked from the footer for Razorpay activation)
+    path('privacy-policy/', views.privacy_policy, name='privacy_policy'),
+    path('terms-and-conditions/', views.terms_conditions, name='terms_conditions'),
+    path('cancellation-refund-policy/', views.refund_policy, name='refund_policy'),
+    path('contact-us/', views.contact_us, name='contact_us'),
+    path('service-fulfillment/', views.service_fulfillment, name='service_fulfillment'),
 ]

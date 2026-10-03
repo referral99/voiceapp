@@ -9,12 +9,13 @@ Covers:
   * hangup view
   * connect_last_user (premium gating)
   * premium_page + payment_success (Razorpay mocked, signature verification)
-  * login / send_otp / verify_otp (OTP auth flow)
+  * login / send_email_otp / verify_email_otp (email OTP auth flow)
   * healthz health check
   * ChatConsumer WebSocket (chat relay, WebRTC signalling, call-ended)
 
 Razorpay is always mocked so tests never touch the network.
 """
+import time
 from datetime import timedelta
 from unittest import mock
 
@@ -31,6 +32,7 @@ from .models import (
     PREMIUM_RECONNECT_LIMIT,
     FREE_RECONNECT_LIMIT,
 )
+from .views import EMAIL_OTP_TTL_SECONDS
 
 
 # ---------------------------------------------------------------------------
@@ -458,56 +460,86 @@ class LoginViewTests(TestCase):
         resp = self.client.get(reverse('login'))
         self.assertRedirects(resp, reverse('home'), fetch_redirect_response=False)
 
-    def test_post_mobile_shows_otp_page(self):
-        resp = self.client.post(reverse('login'), {
-            'auth_method': 'mobile',
-            'mobile_no': '+911234567890',
-        })
+    def test_login_page_shows_email_form(self):
+        resp = self.client.get(reverse('login'))
         self.assertEqual(resp.status_code, 200)
-        self.assertTemplateUsed(resp, 'chat/verify_otp.html')
-
-    def test_post_email_without_google_shows_error(self):
-        resp = self.client.post(reverse('login'), {'auth_method': 'email'})
-        self.assertEqual(resp.status_code, 200)
-        self.assertFalse(resp.context['google_available'])
+        # The active login method is the email OTP form.
+        self.assertContains(resp, reverse('send_email_otp'))
 
 
-class OtpFlowTests(TestCase):
+class EmailOtpFlowTests(TestCase):
     def setUp(self):
         self.client = Client()
 
-    def test_send_otp_sets_session_and_renders(self):
-        resp = self.client.post(reverse('send_otp'), {'mobile_no': '+919999999999'})
+    def test_send_email_otp_sets_session_and_renders(self):
+        resp = self.client.post(reverse('send_email_otp'), {'email': 'User@Example.com'})
         self.assertEqual(resp.status_code, 200)
         self.assertTemplateUsed(resp, 'chat/verify_otp.html')
-        self.assertIn('otp', self.client.session)
-        self.assertEqual(self.client.session['mobile'], '+919999999999')
+        self.assertIn('email_otp', self.client.session)
+        # Email is normalised to lowercase.
+        self.assertEqual(self.client.session['email'], 'user@example.com')
 
-    def test_send_otp_get_redirects_login(self):
-        resp = self.client.get(reverse('send_otp'))
+    def test_send_email_otp_invalid_email_shows_error(self):
+        resp = self.client.post(reverse('send_email_otp'), {'email': 'not-an-email'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, 'chat/login.html')
+        self.assertNotIn('email_otp', self.client.session)
+
+    def test_send_email_otp_get_redirects_login(self):
+        resp = self.client.get(reverse('send_email_otp'))
         self.assertRedirects(resp, reverse('login'), fetch_redirect_response=False)
 
-    def test_verify_otp_success_logs_in_and_creates_user(self):
+    def test_verify_email_otp_success_logs_in_and_creates_user(self):
         # Seed the session with a known OTP.
-        self.client.post(reverse('send_otp'), {'mobile_no': '+918888888888'})
-        otp = self.client.session['otp']
+        self.client.post(reverse('send_email_otp'), {'email': 'alice@example.com'})
+        otp = self.client.session['email_otp']
 
-        resp = self.client.post(reverse('verify_otp'), {'otp': otp})
+        resp = self.client.post(reverse('verify_email_otp'), {'otp': otp})
         self.assertRedirects(resp, reverse('home'), fetch_redirect_response=False)
-        self.assertTrue(User.objects.filter(username='user_+918888888888').exists())
+        user = User.objects.get(username='email_alice@example.com')
+        self.assertEqual(user.email, 'alice@example.com')
         # Session OTP is cleaned up.
-        self.assertNotIn('otp', self.client.session)
+        self.assertNotIn('email_otp', self.client.session)
 
-    def test_verify_otp_wrong_code_shows_error(self):
-        self.client.post(reverse('send_otp'), {'mobile_no': '+917777777777'})
-        resp = self.client.post(reverse('verify_otp'), {'otp': '000000'})
+    def test_verify_email_otp_wrong_code_shows_error(self):
+        self.client.post(reverse('send_email_otp'), {'email': 'bob@example.com'})
+        resp = self.client.post(reverse('verify_email_otp'), {'otp': '000000'})
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.context['error'], 'Invalid OTP')
-        self.assertFalse(User.objects.filter(username='user_+917777777777').exists())
+        self.assertFalse(User.objects.filter(username='email_bob@example.com').exists())
 
-    def test_verify_otp_get_redirects_login(self):
-        resp = self.client.get(reverse('verify_otp'))
+    def test_verify_email_otp_get_redirects_login(self):
+        resp = self.client.get(reverse('verify_email_otp'))
         self.assertRedirects(resp, reverse('login'), fetch_redirect_response=False)
+
+    def test_verify_email_otp_within_ttl_succeeds(self):
+        self.client.post(reverse('send_email_otp'), {'email': 'fresh@example.com'})
+        otp = self.client.session['email_otp']
+
+        # Pretend the code was issued 60s ago - still within the 2-min window.
+        session = self.client.session
+        session['email_otp_ts'] = time.time() - 60
+        session.save()
+
+        resp = self.client.post(reverse('verify_email_otp'), {'otp': otp})
+        self.assertRedirects(resp, reverse('home'), fetch_redirect_response=False)
+        self.assertTrue(User.objects.filter(username='email_fresh@example.com').exists())
+
+    def test_verify_email_otp_expired_is_rejected(self):
+        self.client.post(reverse('send_email_otp'), {'email': 'stale@example.com'})
+        otp = self.client.session['email_otp']
+
+        # Pretend the code was issued over 2 minutes ago -> expired.
+        session = self.client.session
+        session['email_otp_ts'] = time.time() - (EMAIL_OTP_TTL_SECONDS + 5)
+        session.save()
+
+        resp = self.client.post(reverse('verify_email_otp'), {'otp': otp})
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.context['expired'])
+        # No account created, and the stale code is cleared from the session.
+        self.assertFalse(User.objects.filter(username='email_stale@example.com').exists())
+        self.assertNotIn('email_otp', self.client.session)
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,43 @@
+{% extends "chat/legal/base_legal.html" %}
+
+{% block page_title %}Service Fulfillment{% endblock %}
+{% block page_desc %}How SpeakFluent delivers its digital Premium service.{% endblock %}
+{% block heading %}Service Fulfillment Policy{% endblock %}
+
+{% block content %}
+<p>SpeakFluent provides a digital service only. We do not sell or ship any physical goods, so
+no shipping or delivery of physical items applies. This page explains how our digital service
+is fulfilled.</p>
+
+<h2>1. What you are purchasing</h2>
+<p>A SpeakFluent Premium pass is a digital subscription that unlocks match filtering (by sex,
+profession, and age), unlimited call duration, and the ability to reconnect with previous
+partners.</p>
+
+<h2>2. Delivery / activation</h2>
+<p>Premium is delivered electronically and activated <strong>instantly</strong> after your
+payment is successfully verified through Razorpay. There is no physical shipment and no
+waiting period.</p>
+
+<h2>3. Validity</h2>
+<p>The Premium pass is a daily pass. It is valid from the moment of activation until the next
+local midnight (IST), after which it automatically lapses. It does not auto-renew.</p>
+
+<h2>4. Accessing your purchase</h2>
+<p>Once activated, Premium features are immediately available in your logged-in account across
+the matchmaking and call pages. No download or additional step is required.</p>
+
+<h2>5. If activation fails</h2>
+<p>If your payment succeeds but Premium is not activated, please contact us with your Razorpay
+order/payment ID and we will resolve it promptly. See our
+<a href="{% url 'refund_policy' %}">Cancellation &amp; Refund Policy</a>.</p>
+
+<h2>6. Contact</h2>
+<div class="contact-block">
+    Support: <a href="mailto:support@speakfluent.example">support@speakfluent.example</a><br>
+    Phone: +91-XXXXXXXXXX
+</div>
+<p class="legal-note">Note: Since SpeakFluent sells a digital product, this page serves as the
+Service Fulfillment / Delivery policy in place of a physical shipping policy. Replace the
+placeholder contact details with your real information before Razorpay activation.</p>
+{% endblock %}

@@ -5,177 +5,259 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Connect - Anonymous</title>
+    <title>SpeakFluent — English Speaking Practice</title>
+    <meta name="description" content="Practice spoken English with real partners through live voice calls and chat. Build fluency and confidence, one conversation at a time.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'chat/css/style.css' %}">
-    <style>
-            .status-pulse {
-              width: 80px;
-              height: 80px;
-              background: #00b894;
-              border-radius: 50%;
-              margin: 0 auto 20px;
-              animation: pulse 2s infinite; /* ⬅️ यहां */
-            }
-
-            @keyframes pulse {
-              0% {
-                transform: scale(0.95);
-                box-shadow: 0 0 0 0 rgba(0, 184, 148, 0.7);
-              }
-              70% {
-                transform: scale(1);
-                box-shadow: 0 0 0 20px rgba(0, 184, 148, 0);
-              }
-              100% {
-                transform: scale(0.95);
-                box-shadow: 0 0 0 0 rgba(0, 184, 148, 0);
-              }
-            }
-    </style>
 </head>
-<style>
-    body{
-  background-color: hsl(var(--background));
-  color: hsl(var(--foreground));
-}
-</style>
 <body>
+<div class="hero-bg">
 
 {% if searching %}
-<div class="container2">
-    <div class="searching-overlay">
-        <div class="modal-content">
-            <h1>Finding a match...</h1>
-            <div class="status-pulse" id="statusIcon"></div>
-            <p>Please wait while we connect you to someone</p>
-             <a href="{% url 'home' %}" class="btn-skip">Cancel</a>
+    <div class="container2">
+        <div class="searching-overlay">
+            <div class="modal-content">
+                <div class="status-pulse" id="statusIcon">🎧</div>
+                <h2>Finding a conversation partner…</h2>
+                <p style="color:#64748b;">Please wait a moment while we connect you with another learner to begin your English speaking session.</p>
+                <a href="{% url 'home' %}" class="btn-skip">Cancel</a>
+            </div>
         </div>
     </div>
-</div>
-<script>
-           setTimeout(function() {
+    <script>
+        setTimeout(function () {
+            {% if reconnecting %}
+            // Keep retrying through the reconnect path so we continue to prefer
+            // the previous partner if they start searching again. The polling
+            // flag prevents the retry from consuming the reconnect allowance.
+            window.location.href = "{% url 'reconnect_user' mode=mode name=name %}?polling=1";
+            {% else %}
             window.location.href = "{% url 'match_user' mode=mode name=name %}";
+            {% endif %}
         }, 3000);
-</script>
-
+    </script>
 
 {% else %}
 
-<div class="container">
-    {% if messages %}
-    <div class="messages">
-        {% for message in messages %}
-        <div class="alert alert-{{ message.tags }}" style="padding:10px 15px; margin-bottom:12px; border-radius:8px; background:#f1f1f1;">
-            {{ message }}
+    <!-- Top navigation -->
+    <nav class="topbar">
+        <div class="brand">
+            <span class="logo-mark">🗣️</span>
+            <span>SpeakFluent</span>
         </div>
-        {% endfor %}
-    </div>
-    {% endif %}
-    <header>
-        <h1>Anonymous Connect</h1>
         <div class="wallet-info">
-            Wallet: ₹{{ profile.wallet_balance|default:"0" }}
-            <a href="{% url 'premium_page' %}" class="btn-premium">Go Premium</a>
+            <span>Wallet: ₹{{ profile.wallet_balance|default:"0" }}</span>
+            <a href="{% url 'premium_page' %}" class="btn-premium">Upgrade to Premium</a>
+
+            {% if user.is_authenticated %}
+            <!-- Profile avatar + dropdown (name initial, click to reveal details) -->
+            <div class="profile-menu" id="profileMenu">
+                <button type="button" class="profile-avatar" id="profileAvatarBtn"
+                        aria-haspopup="true" aria-expanded="false"
+                        title="{{ account_name }}">
+                    {{ account_initial }}
+                </button>
+                <div class="profile-dropdown" id="profileDropdown" role="menu">
+                    <div class="pd-avatar">{{ account_initial }}</div>
+                    <div class="pd-name">{{ account_name }}</div>
+                    {% if account_email %}<div class="pd-email">{{ account_email }}</div>{% endif %}
+                    <a href="{% url 'account_logout' %}" class="pd-logout" role="menuitem">Sign out</a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </nav>
+
+    <!-- Hero headline -->
+    <header class="hero-head">
+        <span class="eyebrow">Live English Conversation Practice</span>
+        <h1>Speak English with <span class="accent">Confidence</span></h1>
+        <p>Connect instantly with fellow learners around the world for live voice and chat sessions. Improve your fluency, pronunciation, and confidence through genuine conversation.</p>
+        <div class="hero-stats">
+            <div class="stat"><b>24/7</b><span>Partners Available</span></div>
+            <div class="stat"><b>Live</b><span>Voice &amp; Chat</span></div>
+            <div class="stat"><b>Free</b><span>To Get Started</span></div>
         </div>
     </header>
 
-    <section class="form-section">
-        <!-- Added ID to the form for JavaScript access -->
-        <form id="preferencesForm" method="POST">
-            {% csrf_token %}
+    <!-- Main interaction card -->
+    <main class="container">
+        {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
 
-            <h3>What should we call you?</h3>
-            <div class="grid-form">
-                <input type="text" name="display_name" placeholder="Enter your name" required value="{{ profile.display_name|default:'' }}">
+        <div class="card-head">
+            <h2>Begin Your Speaking Session</h2>
+            <p>Tell us a little about yourself and choose how you would like to practise today.</p>
+        </div>
+
+        <section class="form-section">
+            <form id="preferencesForm" method="POST">
+                {% csrf_token %}
+
+                <h3>👤 What should we call you?</h3>
+                <div class="grid-form single">
+                    <input type="text" name="display_name" placeholder="Enter your preferred name" required value="{{ profile.display_name|default:'' }}">
+                </div>
+
+                <h3>📋 A few details about you</h3>
+                <div class="grid-form">
+                    <input type="number" name="age" placeholder="Your age" required value="{{ profile.age|default:'25' }}">
+
+                    <select name="sex">
+                        <option value="any" {% if profile.sex == 'any' %}selected{% endif %}>Gender: Prefer not to say</option>
+                        <option value="male" {% if profile.sex == 'male' %}selected{% endif %}>Male</option>
+                        <option value="female" {% if profile.sex == 'female' %}selected{% endif %}>Female</option>
+                    </select>
+
+                    <select name="profession">
+                        <option value="any" {% if profile.profession == 'any' %}selected{% endif %}>Profession: Any</option>
+                        <option value="student" {% if profile.profession == 'student' %}selected{% endif %}>Student</option>
+                        <option value="engineer" {% if profile.profession == 'engineer' %}selected{% endif %}>Engineer</option>
+                        <option value="lawyer" {% if profile.profession == 'lawyer' %}selected{% endif %}>Lawyer</option>
+                        <option value="other" {% if profile.profession == 'other' %}selected{% endif %}>Other</option>
+                    </select>
+                </div>
+
+                <hr class="divider">
+                <h3>🎯 Partner Preferences {% if not profile.premium_active %}<span class="premium-tag">Premium</span>{% endif %}</h3>
+                <div class="grid-form">
+                    <select name="pref_sex" {% if not profile.premium_active %}disabled{% endif %}>
+                        <option value="any" {% if profile.pref_sex == 'any' %}selected{% endif %}>Preferred Gender: Any</option>
+                        <option value="male" {% if profile.pref_sex == 'male' %}selected{% endif %}>Male</option>
+                        <option value="female" {% if profile.pref_sex == 'female' %}selected{% endif %}>Female</option>
+                    </select>
+
+                    <select name="pref_profession" {% if not profile.premium_active %}disabled{% endif %}>
+                        <option value="any" {% if profile.pref_profession == 'any' %}selected{% endif %}>Preferred Profession: Any</option>
+                        <option value="student" {% if profile.pref_profession == 'student' %}selected{% endif %}>Student</option>
+                        <option value="engineer" {% if profile.pref_profession == 'engineer' %}selected{% endif %}>Engineer</option>
+                        <option value="lawyer" {% if profile.pref_profession == 'lawyer' %}selected{% endif %}>Lawyer</option>
+                    </select>
+
+                    <select name="pref_age_min" {% if not profile.premium_active %}disabled{% endif %}>
+                        <option value="0" {% if profile.pref_age_min == 0 %}selected{% endif %}>Preferred Age: Any</option>
+                        <option value="18" {% if profile.pref_age_min == 18 %}selected{% endif %}>Greater than 18</option>
+                        <option value="21" {% if profile.pref_age_min == 21 %}selected{% endif %}>Greater than 21</option>
+                        <option value="25" {% if profile.pref_age_min == 25 %}selected{% endif %}>Greater than 25</option>
+                        <option value="30" {% if profile.pref_age_min == 30 %}selected{% endif %}>Greater than 30</option>
+                        <option value="40" {% if profile.pref_age_min == 40 %}selected{% endif %}>Greater than 40</option>
+                        <option value="50" {% if profile.pref_age_min == 50 %}selected{% endif %}>Greater than 50</option>
+                    </select>
+                </div>
+
+                <input type="hidden" name="connection_mode" id="connectionMode" value="">
+            </form>
+        </section>
+
+        <section class="action-section">
+            <div class="main-actions">
+                <button type="button" class="btn-action chat" onclick="submitAndConnect('chat')">
+                    <span class="ba-icon">💬</span>
+                    Start a Chat Session
+                    <span class="ba-sub">Practise writing &amp; reading</span>
+                </button>
+                <button type="button" class="btn-action voice" onclick="submitAndConnect('voice')">
+                    <span class="ba-icon">🎙️</span>
+                    Start a Voice Call
+                    <span class="ba-sub">Practise speaking &amp; listening</span>
+                </button>
             </div>
-
-            <h3>Tell us about yourself</h3>
-            <div class="grid-form">
-                <input type="number" name="age" placeholder="Your Age" required value="{{ profile.age|default:'25' }}">
-
-                <select name="sex">
-                    <option value="any" {% if profile.sex == 'any' %}selected{% endif %}>Sex: Any</option>
-                    <option value="male" {% if profile.sex == 'male' %}selected{% endif %}>Male</option>
-                    <option value="female" {% if profile.sex == 'female' %}selected{% endif %}>Female</option>
-                </select>
-
-                <select name="profession">
-                    <option value="any" {% if profile.profession == 'any' %}selected{% endif %}>Profession: Any</option>
-                    <option value="student" {% if profile.profession == 'student' %}selected{% endif %}>Student</option>
-                    <option value="engineer" {% if profile.profession == 'engineer' %}selected{% endif %}>Engineer</option>
-                    <option value="lawyer" {% if profile.profession == 'lawyer' %}selected{% endif %}>Lawyer</option>
-                    <option value="other" {% if profile.profession == 'other' %}selected{% endif %}>Other</option>
-                </select>
+            <div class="secondary-actions">
+                <a href="{% url 'connect_last_user' %}" class="btn-last">🔁 Reconnect with Your Last Partner <span class="premium-tag">Premium</span></a>
             </div>
+        </section>
+    </main>
 
-            <hr>
-            <h3>Match Preferences {% if not profile.is_premium %}<span class="premium-tag">Premium Service</span>{% endif %}</h3>
-            <div class="grid-form">
-                <select name="pref_sex" {% if not profile.is_premium %}disabled{% endif %}>
-                    <option value="any" {% if profile.pref_sex == 'any' %}selected{% endif %}>Preference: Any Sex</option>
-                    <option value="male" {% if profile.pref_sex == 'male' %}selected{% endif %}>Male</option>
-                    <option value="female" {% if profile.pref_sex == 'female' %}selected{% endif %}>Female</option>
-                </select>
-
-                <select name="pref_profession" {% if not profile.is_premium %}disabled{% endif %}>
-                    <option value="any" {% if profile.pref_profession == 'any' %}selected{% endif %}>Preference: Any Profession</option>
-                    <option value="student" {% if profile.pref_profession == 'student' %}selected{% endif %}>Student</option>
-                    <option value="engineer" {% if profile.pref_profession == 'engineer' %}selected{% endif %}>Engineer</option>
-                    <option value="lawyer" {% if profile.pref_profession == 'lawyer' %}selected{% endif %}>Lawyer</option>
-                </select>
-            </div>
-
-            <!-- Hidden input to determine which mode was chosen -->
-            <input type="hidden" name="connection_mode" id="connectionMode" value="">
-        </form>
+    <!-- Feature highlights -->
+    <section class="feature-strip">
+        <div class="feature-card">
+            <span class="fc-icon">🌍</span>
+            <h4>Global Community</h4>
+            <p>Converse with motivated learners from across the world, anytime.</p>
+        </div>
+        <div class="feature-card">
+            <span class="fc-icon">🎙️</span>
+            <h4>Real Conversations</h4>
+            <p>Build fluency through authentic voice and text exchanges.</p>
+        </div>
+        <div class="feature-card">
+            <span class="fc-icon">⚡</span>
+            <h4>Instant Matching</h4>
+            <p>Get paired with a partner in seconds and start speaking right away.</p>
+        </div>
     </section>
 
-    <section class="action-section">
-        <div class="main-actions">
-            <!-- Buttons now trigger the JavaScript function instead of direct links -->
-            <button type="button" class="btn-action chat" onclick="submitAndConnect('chat')">Connect Random Chat</button>
-            <button type="button" class="btn-action voice" onclick="submitAndConnect('voice')">Connect Voice Call</button>
-        </div>
-        <div class="secondary-actions">
-            <a href="{% url 'connect_last_user' %}" class="btn-last">Connect Last User <span class="premium-tag">Premium</span></a>
-        </div>
-    </section>
-</div>
+    {% include "chat/_policy_footer.html" %}
 
-<!-- Registration Overlay (Modal) -->
-{% if show_register_modal and not user.is_authenticated %}
-<div id="regModal" class="modal-overlay">
-    <div class="modal-content">
-        <h2>Complete Registration</h2>
-        <p>Register to save your preferences and earn rewards.</p>
-        <div class="modal-buttons">
-            <a href="{% url 'login' %}" class="btn-submit" style="text-decoration: none; display: inline-block;">Register Now</a>
-            <button class="btn-skip" onclick="closeModal()">Skip for now</button>
+    <!-- Registration Overlay (Modal) -->
+    {% if show_register_modal and not user.is_authenticated %}
+    <div id="regModal" class="modal-overlay">
+        <div class="modal-content">
+            <h2>Create Your Free Account</h2>
+            <p>Register to save your preferences, track your progress, and unlock rewards.</p>
+            <div class="modal-buttons">
+                <a href="{% url 'login' %}" class="btn-submit" style="text-decoration: none; display: inline-block;">Register Now</a>
+                <button class="btn-skip" onclick="closeModal()">Continue as guest</button>
+            </div>
         </div>
     </div>
-</div>
-{% endif %}
+    {% endif %}
 
-<script>
-    function submitAndConnect(mode) {
-        const form = document.getElementById('preferencesForm');
-
-        // Basic Validation Check
-        if (!form.checkValidity()) {
-            form.reportValidity();
-            return {"error": "Please fill out all required fields."}
+    <script>
+        function submitAndConnect(mode) {
+            const form = document.getElementById('preferencesForm');
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return;
+            }
+            document.getElementById('connectionMode').value = mode;
+            form.submit();
         }
 
-        document.getElementById('connectionMode').value = mode;
-        form.submit();
-    }
+        function closeModal() {
+            const modal = document.getElementById('regModal');
+            if (modal) modal.style.display = 'none';
+        }
 
-    function closeModal() {
-        const modal = document.getElementById('regModal');
-        if (modal) modal.style.display = 'none';
-    }
-</script>
-<script src="{% static 'chat/js/main.js' %}"></script>
+        // Profile dropdown: show name + email when the avatar initial is clicked.
+        (function () {
+            const btn = document.getElementById('profileAvatarBtn');
+            const menu = document.getElementById('profileMenu');
+            if (!btn || !menu) return;
+
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                const open = menu.classList.toggle('open');
+                btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            });
+
+            // Close when clicking anywhere outside the menu.
+            document.addEventListener('click', function (e) {
+                if (!menu.contains(e.target)) {
+                    menu.classList.remove('open');
+                    btn.setAttribute('aria-expanded', 'false');
+                }
+            });
+
+            // Close on Escape for keyboard users.
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape') {
+                    menu.classList.remove('open');
+                    btn.setAttribute('aria-expanded', 'false');
+                }
+            });
+        })();
+    </script>
+    <script src="{% static 'chat/js/main.js' %}"></script>
 {% endif %}
+
+</div>
 </body>
 </html>

@@ -23,8 +23,10 @@ AGE_GROUP_CHOICES = [
     (50, 'Greater than 50'),
 ]
 
-# Daily premium pricing (INR) and the number of reconnects each tier gets.
-PREMIUM_DAILY_PRICE_INR = 10
+# Daily premium pricing and the number of reconnects each tier gets.
+# Indian users are charged in INR; everyone else (global users) in USD.
+PREMIUM_DAILY_PRICE_INR = 10      # ₹10 per day for users in India
+PREMIUM_DAILY_PRICE_USD = 1       # $1 per day for global (non-Indian) users
 PREMIUM_RECONNECT_LIMIT = 5
 FREE_RECONNECT_LIMIT = 1
 

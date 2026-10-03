@@ -1,0 +1,41 @@
+{% comment %}
+Shared site footer with the mandatory policy links required for Razorpay
+activation. Include this on every public page:  {% include "chat/_policy_footer.html" %}
+{% endcomment %}
+<footer class="site-foot policy-foot">
+    <nav class="policy-links">
+        <a href="{% url 'privacy_policy' %}">Privacy Policy</a>
+        <span class="sep">·</span>
+        <a href="{% url 'terms_conditions' %}">Terms &amp; Conditions</a>
+        <span class="sep">·</span>
+        <a href="{% url 'refund_policy' %}">Cancellation &amp; Refund Policy</a>
+        <span class="sep">·</span>
+        <a href="{% url 'contact_us' %}">Contact Us</a>
+        <span class="sep">·</span>
+        <a href="{% url 'service_fulfillment' %}">Service Fulfillment</a>
+    </nav>
+    <div class="policy-copy">
+        © {% now "Y" %} SpeakFluent · Practise English speaking with confidence.
+    </div>
+    <style>
+        .policy-foot { padding: 22px 16px; text-align: center; }
+        .policy-links {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 6px 8px;
+            margin-bottom: 8px;
+        }
+        .policy-links a {
+            color: #fff;
+            font-weight: 600;
+            font-size: 0.88em;
+            text-decoration: none;
+            opacity: 0.92;
+        }
+        .policy-links a:hover { opacity: 1; text-decoration: underline; }
+        .policy-links .sep { color: rgba(255,255,255,0.5); font-size: 0.85em; }
+        .policy-copy { color: rgba(255,255,255,0.85); font-size: 0.85em; }
+    </style>
+</footer>

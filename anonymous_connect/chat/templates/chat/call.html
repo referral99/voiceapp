@@ -133,6 +133,66 @@
         .wa-send-btn:hover { box-shadow: 0 5px 16px rgba(139,63,209,0.6); }
         .wa-send-btn:active { transform: scale(0.96); }
 
+        /* --- Emoji toggle button in input bar --- */
+        .wa-emoji-btn {
+            flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%;
+            border: none; cursor: pointer; font-size: 1.4em; line-height: 1;
+            background: #2b3054; color: #eef0ff;
+            display: flex; align-items: center; justify-content: center;
+            transition: background 0.15s ease, transform 0.08s ease;
+        }
+        .wa-emoji-btn:hover { background: #3a3f66; }
+        .wa-emoji-btn.active { background: #8b3fd1; }
+        .wa-emoji-btn:active { transform: scale(0.92); }
+
+        /* --- Emoji picker panel --- */
+        .emoji-panel {
+            display: none; flex: 0 0 auto; flex-direction: column;
+            background: #1f2340; border-top: 1px solid #3a3f66;
+            max-height: 260px;
+        }
+        .emoji-panel.open { display: flex; }
+        .emoji-search-wrap { padding: 10px 10px 6px; flex: 0 0 auto; }
+        #emoji-search {
+            width: 100%; padding: 9px 14px; border-radius: 20px;
+            border: 1px solid #3a3f66; outline: none; font-size: 0.92em;
+            background: #2b3054; color: #eef0ff;
+        }
+        #emoji-search::placeholder { color: #9aa0c7; }
+        #emoji-search:focus { border-color: #8b3fd1; box-shadow: 0 0 0 2px rgba(139,63,209,0.25); }
+        .emoji-section-label {
+            grid-column: 1 / -1; font-size: 0.72em; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.06em;
+            color: #9aa0c7; padding: 4px 2px 2px;
+        }
+        .emoji-empty {
+            grid-column: 1 / -1; text-align: center; color: #9aa0c7;
+            font-size: 0.9em; padding: 18px 0;
+        }
+        .emoji-cats {
+            display: flex; gap: 2px; padding: 8px 10px 4px; overflow-x: auto;
+            border-bottom: 1px solid #3a3f66; flex: 0 0 auto;
+        }
+        .emoji-cat-btn {
+            background: transparent; border: none; cursor: pointer;
+            font-size: 1.25em; padding: 6px 8px; border-radius: 10px;
+            opacity: 0.65; transition: opacity 0.15s ease, background 0.15s ease;
+        }
+        .emoji-cat-btn:hover { opacity: 1; background: #2b3054; }
+        .emoji-cat-btn.active { opacity: 1; background: #8b3fd1; }
+        .emoji-grid {
+            display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px;
+            padding: 8px 10px 12px; overflow-y: auto; flex: 1 1 auto;
+        }
+        .emoji-grid button {
+            background: transparent; border: none; cursor: pointer;
+            font-size: 1.5em; line-height: 1; padding: 6px 0; border-radius: 8px;
+            transition: background 0.1s ease, transform 0.08s ease;
+        }
+        .emoji-grid button:hover { background: #2b3054; }
+        .emoji-grid button:active { transform: scale(0.85); }
+        @media (max-width: 420px) { .emoji-grid { grid-template-columns: repeat(7, 1fr); } }
+
         /* Pure voice-mode fallback panel */
         .wa-voice-panel { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; color: #3b4a54; }
         .status-pulse {
@@ -214,8 +274,19 @@
 
     {% if mode == 'chat' %}
     <div id="chat-log"></div>
+
+    <!-- Emoji picker panel (WhatsApp-style) -->
+    <div id="emoji-panel" class="emoji-panel">
+        <div class="emoji-search-wrap">
+            <input id="emoji-search" type="text" placeholder="Search emoji" autocomplete="off">
+        </div>
+        <div class="emoji-cats" id="emoji-cats"></div>
+        <div class="emoji-grid" id="emoji-grid"></div>
+    </div>
+
     <div class="wa-input-bar">
-        <input id="chat-message-input" type="text" placeholder="Type a message">
+        <button id="emoji-toggle" class="wa-emoji-btn" type="button" title="Emoji">😊</button>
+        <input id="chat-message-input" type="text" placeholder="Type a message" autocomplete="off">
         <button id="chat-message-submit" class="wa-send-btn" title="Send">Send <span style="font-size:1.05em;">➤</span></button>
     </div>
     {% else %}
@@ -296,6 +367,228 @@
             }
         };
         input.onkeyup = function (e) { if (e.key === 'Enter') submit.click(); };
+    }
+
+    // 2b. Emoji picker (WhatsApp-style).
+    const EMOJI_CATEGORIES = {
+        '😊': ['😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😌','😍','🥰','😘','😗','😙','😚','😋','😛','😝','😜','🤪','🤨','🧐','🤓','😎','🥳','😏','😒','😞','😔','😟','😕','🙁','😣','😖','😫','😩','🥺','😢','😭','😤','😠','😡','🤬','🤯','😳','🥵','🥶','😱','😨','😰','😥','😓','🤗','🤔','🤭','🤫','🤥','😬','🙄','😮','😲','🥱','😴','🤤','😪','😵','🤐','🥴','🤢','🤮','🤧','😷','🤒','🤕'],
+        '❤️': ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟','♥️','💌','💋','💯','💢','💥','💫','💦','💨','🕳️','💣','💬','💭','🔥','✨','⭐','🌟','💤'],
+        '👍': ['👍','👎','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','👇','☝️','👋','🤚','🖐️','✋','🖖','👏','🙌','🤲','🙏','🤝','💪','🫶','🫡','✍️','💅','👀','👂','👃','🫀','🧠'],
+        '🎉': ['🎉','🎊','🎈','🎁','🎀','🎂','🍰','🧁','🍾','🥂','🍻','🥳','🎆','🎇','🧨','✨','🎃','🎄','🎗️','🏆','🥇','🥈','🥉','🏅','🎯','🎮','🎲','🎸','🎺','🎻','🥁','🎤','🎧','🎵','🎶'],
+        '🍕': ['🍕','🍔','🍟','🌭','🍿','🥪','🌮','🌯','🥙','🧆','🍜','🍝','🍲','🍛','🍣','🍱','🍚','🍙','🍘','🍢','🍡','🍧','🍨','🍦','🥧','🍩','🍪','☕','🍵','🧃','🥤','🍺','🍷','🍸','🍹','🍎','🍌','🍓','🍉','🍇'],
+        '✈️': ['✈️','🚗','🚕','🚌','🚎','🏎️','🚓','🚑','🚒','🚜','🛵','🏍️','🚲','🛴','🚂','🚆','🚇','🚉','🚁','🛩️','🚀','🛸','⛵','🚤','🛳️','🏠','🏢','🏨','🏖️','🏝️','⛰️','🌋','🗺️','🧳','🌍','🌎','🌏'],
+    };
+
+    // Keyword index for search (emoji -> search terms).
+    const EMOJI_KEYWORDS = {
+        '😀':'grin happy smile','😃':'happy smile joy','😄':'happy laugh smile','😁':'grin beam',
+        '😆':'laugh haha','😅':'sweat laugh','😂':'joy laugh tears lol','🤣':'rofl laugh lol',
+        '😊':'blush smile happy','😇':'angel innocent','🙂':'slight smile','🙃':'upside down silly',
+        '😉':'wink','😌':'relieved calm','😍':'love heart eyes','🥰':'love hearts adore',
+        '😘':'kiss love','😗':'kiss','😙':'kiss smile','😚':'kiss closed','😋':'yum tasty tongue',
+        '😛':'tongue','😝':'tongue silly','😜':'wink tongue','🤪':'crazy zany silly','🤨':'raised eyebrow suspicious',
+        '🧐':'monocle thinking','🤓':'nerd geek glasses','😎':'cool sunglasses','🥳':'party celebrate',
+        '😏':'smirk','😒':'unamused meh','😞':'disappointed sad','😔':'pensive sad','😟':'worried',
+        '😕':'confused','🙁':'frown sad','😣':'persevere','😖':'confounded','😫':'tired','😩':'weary',
+        '🥺':'pleading puppy eyes beg','😢':'cry sad tear','😭':'sob cry bawl','😤':'triumph huff angry',
+        '😠':'angry mad','😡':'rage angry mad red','🤬':'swearing curse angry','🤯':'mind blown shock',
+        '😳':'flushed shock embarrassed','🥵':'hot heat sweat','🥶':'cold freeze','😱':'scream shock fear',
+        '😨':'fearful scared','😰':'anxious sweat','😥':'sad relieved','😓':'sweat downcast','🤗':'hug hugging',
+        '🤔':'thinking hmm','🤭':'hand over mouth giggle','🤫':'shush quiet secret','🤥':'lying liar nose',
+        '😬':'grimace awkward','🙄':'eye roll','😮':'surprised oh wow','😲':'astonished shock',
+        '🥱':'yawn tired bored','😴':'sleep zzz','🤤':'drool','😪':'sleepy','😵':'dizzy knocked out',
+        '🤐':'zipper mouth quiet','🥴':'woozy drunk','🤢':'nauseated sick','🤮':'vomit sick puke',
+        '🤧':'sneeze sick','😷':'mask sick','🤒':'thermometer sick ill','🤕':'bandage hurt injured',
+        '❤️':'red heart love','🧡':'orange heart','💛':'yellow heart','💚':'green heart','💙':'blue heart',
+        '💜':'purple heart','🖤':'black heart','🤍':'white heart','🤎':'brown heart','💔':'broken heart',
+        '❣️':'heart exclamation','💕':'two hearts love','💞':'revolving hearts','💓':'beating heart',
+        '💗':'growing heart','💖':'sparkling heart','💘':'heart arrow cupid','💝':'heart gift',
+        '💟':'heart decoration','♥️':'heart suit','💌':'love letter','💋':'kiss lips','💯':'hundred perfect',
+        '💢':'anger','💥':'collision boom','💫':'dizzy stars','💦':'sweat drops','💨':'dash wind',
+        '🕳️':'hole','💣':'bomb','💬':'speech bubble chat','💭':'thought bubble','🔥':'fire lit hot',
+        '✨':'sparkles stars','⭐':'star','🌟':'glowing star','💤':'zzz sleep',
+        '👍':'thumbs up like yes good','👎':'thumbs down dislike no bad','👌':'ok perfect','🤌':'pinched fingers',
+        '🤏':'pinch small','✌️':'victory peace','🤞':'fingers crossed luck','🤟':'love you','🤘':'rock horns',
+        '🤙':'call me hang loose','👈':'point left','👉':'point right','👆':'point up','👇':'point down',
+        '☝️':'point up index','👋':'wave hi hello bye','🤚':'raised back hand','🖐️':'hand fingers',
+        '✋':'raised hand stop high five','🖖':'vulcan spock','👏':'clap applause','🙌':'raising hands celebrate',
+        '🤲':'palms up','🙏':'pray thanks please namaste','🤝':'handshake deal','💪':'muscle strong flex',
+        '🫶':'heart hands love','🫡':'salute','✍️':'writing hand','💅':'nail polish','👀':'eyes look',
+        '👂':'ear','👃':'nose','🫀':'anatomical heart','🧠':'brain',
+        '🎉':'party tada celebrate congrats','🎊':'confetti party','🎈':'balloon','🎁':'gift present',
+        '🎀':'ribbon bow','🎂':'birthday cake','🍰':'cake slice','🧁':'cupcake','🍾':'champagne bottle',
+        '🥂':'cheers toast','🍻':'beers cheers','🎆':'fireworks','🎇':'sparkler','🧨':'firecracker',
+        '🎃':'halloween pumpkin','🎄':'christmas tree','🎗️':'ribbon','🏆':'trophy win','🥇':'gold medal first',
+        '🥈':'silver medal second','🥉':'bronze medal third','🏅':'medal','🎯':'target bullseye dart',
+        '🎮':'game controller','🎲':'dice game','🎸':'guitar','🎺':'trumpet','🎻':'violin','🥁':'drum',
+        '🎤':'microphone sing','🎧':'headphones music','🎵':'music note','🎶':'music notes',
+        '🍕':'pizza','🍔':'burger hamburger','🍟':'fries','🌭':'hot dog','🍿':'popcorn','🥪':'sandwich',
+        '🌮':'taco','🌯':'burrito','🥙':'pita wrap','🧆':'falafel','🍜':'ramen noodles','🍝':'pasta spaghetti',
+        '🍲':'stew pot','🍛':'curry rice','🍣':'sushi','🍱':'bento','🍚':'rice','🍙':'rice ball','🍘':'rice cracker',
+        '🍢':'oden','🍡':'dango','🍧':'shaved ice','🍨':'ice cream','🍦':'soft serve','🥧':'pie','🍩':'donut',
+        '🍪':'cookie','☕':'coffee tea hot','🍵':'tea green','🧃':'juice box','🥤':'cup drink soda','🍺':'beer',
+        '🍷':'wine','🍸':'cocktail martini','🍹':'tropical drink','🍎':'apple','🍌':'banana','🍓':'strawberry',
+        '🍉':'watermelon','🍇':'grapes',
+        '✈️':'airplane plane flight travel','🚗':'car','🚕':'taxi','🚌':'bus','🚎':'trolley bus','🏎️':'race car',
+        '🚓':'police car','🚑':'ambulance','🚒':'fire truck','🚜':'tractor','🛵':'scooter','🏍️':'motorcycle',
+        '🚲':'bicycle bike','🛴':'kick scooter','🚂':'train steam','🚆':'train','🚇':'metro subway','🚉':'station',
+        '🚁':'helicopter','🛩️':'small plane','🚀':'rocket space launch','🛸':'ufo flying saucer','⛵':'sailboat',
+        '🚤':'speedboat','🛳️':'cruise ship','🏠':'house home','🏢':'office building','🏨':'hotel',
+        '🏖️':'beach','🏝️':'island','⛰️':'mountain','🌋':'volcano','🗺️':'map','🧳':'luggage suitcase',
+        '🌍':'earth globe europe africa','🌎':'earth americas','🌏':'earth asia australia',
+    };
+
+    const RECENTS_KEY = 'emoji_recents';
+    const RECENT_TAB = '🕘';
+    const MAX_RECENTS = 24;
+
+    function getRecents() {
+        try {
+            const raw = localStorage.getItem(RECENTS_KEY);
+            const arr = raw ? JSON.parse(raw) : [];
+            return Array.isArray(arr) ? arr : [];
+        } catch (e) { return []; }
+    }
+    function pushRecent(emo) {
+        try {
+            let arr = getRecents().filter(function (x) { return x !== emo; });
+            arr.unshift(emo);
+            if (arr.length > MAX_RECENTS) arr = arr.slice(0, MAX_RECENTS);
+            localStorage.setItem(RECENTS_KEY, JSON.stringify(arr));
+        } catch (e) {}
+    }
+
+    const emojiToggle = document.getElementById('emoji-toggle');
+    const emojiPanel = document.getElementById('emoji-panel');
+    const emojiCats = document.getElementById('emoji-cats');
+    const emojiGrid = document.getElementById('emoji-grid');
+    const emojiSearch = document.getElementById('emoji-search');
+
+    let activeCat = Object.keys(EMOJI_CATEGORIES)[0];
+
+    function makeEmojiButton(emo) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = emo;
+        b.title = (EMOJI_KEYWORDS[emo] || '').split(' ')[0] || '';
+        b.onclick = function () { insertEmoji(emo); };
+        return b;
+    }
+
+    function renderEmojiGrid(catKey) {
+        if (!emojiGrid) return;
+        emojiGrid.innerHTML = '';
+
+        if (catKey === RECENT_TAB) {
+            const recents = getRecents();
+            if (recents.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'emoji-empty';
+                empty.textContent = 'No recently used emoji yet';
+                emojiGrid.appendChild(empty);
+                return;
+            }
+            recents.forEach(function (emo) { emojiGrid.appendChild(makeEmojiButton(emo)); });
+            return;
+        }
+
+        (EMOJI_CATEGORIES[catKey] || []).forEach(function (emo) {
+            emojiGrid.appendChild(makeEmojiButton(emo));
+        });
+    }
+
+    function renderSearchResults(query) {
+        if (!emojiGrid) return;
+        emojiGrid.innerHTML = '';
+        const q = query.trim().toLowerCase();
+        if (!q) { renderEmojiGrid(activeCat); return; }
+
+        const seen = {};
+        const results = [];
+        Object.keys(EMOJI_CATEGORIES).forEach(function (cat) {
+            EMOJI_CATEGORIES[cat].forEach(function (emo) {
+                if (seen[emo]) return;
+                const kw = (EMOJI_KEYWORDS[emo] || '');
+                if (kw.indexOf(q) !== -1) { seen[emo] = true; results.push(emo); }
+            });
+        });
+
+        if (results.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'emoji-empty';
+            empty.textContent = 'No emoji found';
+            emojiGrid.appendChild(empty);
+            return;
+        }
+        results.forEach(function (emo) { emojiGrid.appendChild(makeEmojiButton(emo)); });
+    }
+
+    function insertEmoji(emo) {
+        if (!input) return;
+        const start = input.selectionStart ?? input.value.length;
+        const end = input.selectionEnd ?? input.value.length;
+        input.value = input.value.slice(0, start) + emo + input.value.slice(end);
+        // Keep caret right after the inserted emoji.
+        const pos = start + emo.length;
+        input.focus();
+        try { input.setSelectionRange(pos, pos); } catch (e) {}
+        // Record for the "recently used" row.
+        pushRecent(emo);
+    }
+
+    if (emojiToggle && emojiPanel && emojiCats) {
+        // Build category tabs: recents first, then the themed categories.
+        const tabKeys = [RECENT_TAB].concat(Object.keys(EMOJI_CATEGORIES));
+        tabKeys.forEach(function (catKey, idx) {
+            const tab = document.createElement('button');
+            tab.type = 'button';
+            tab.className = 'emoji-cat-btn' + (idx === 1 ? ' active' : '');
+            tab.textContent = catKey;
+            tab.onclick = function () {
+                emojiCats.querySelectorAll('.emoji-cat-btn').forEach(function (t) { t.classList.remove('active'); });
+                tab.classList.add('active');
+                activeCat = catKey;
+                if (emojiSearch) emojiSearch.value = '';
+                renderEmojiGrid(catKey);
+            };
+            emojiCats.appendChild(tab);
+        });
+        renderEmojiGrid(activeCat);
+
+        if (emojiSearch) {
+            emojiSearch.addEventListener('input', function () {
+                renderSearchResults(emojiSearch.value);
+            });
+        }
+
+        emojiToggle.onclick = function (e) {
+            e.stopPropagation();
+            const open = emojiPanel.classList.toggle('open');
+            emojiToggle.classList.toggle('active', open);
+            if (open) {
+                // Refresh recents each time the picker opens.
+                if (emojiSearch) emojiSearch.value = '';
+                if (activeCat === RECENT_TAB) renderEmojiGrid(RECENT_TAB);
+            }
+        };
+
+        // Close the panel when clicking outside of it or the toggle.
+        document.addEventListener('click', function (e) {
+            if (!emojiPanel.classList.contains('open')) return;
+            if (emojiPanel.contains(e.target) || emojiToggle.contains(e.target)) return;
+            emojiPanel.classList.remove('open');
+            emojiToggle.classList.remove('active');
+        });
+
+        // Hide the picker once a message is sent for a clean, WhatsApp-like flow.
+        if (submit) {
+            const origClick = submit.onclick;
+            submit.onclick = function () {
+                emojiPanel.classList.remove('open');
+                emojiToggle.classList.remove('active');
+                if (typeof origClick === 'function') origClick.call(submit);
+            };
+        }
     }
 
     function tickMarkup(state) {

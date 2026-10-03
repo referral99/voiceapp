@@ -4,88 +4,201 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Go Premium | Anonymous Connect</title>
+    <title>Go Premium — SpeakFluent</title>
+    <meta name="description" content="Upgrade to SpeakFluent Premium for filtered matchmaking, unlimited calls, and reconnects.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'chat/css/style.css' %}">
     <style>
-        .premium-card { text-align: center; padding: 20px; }
-        .price { font-size: 2.5em; font-weight: bold; color: var(--primary); margin: 10px 0; }
-        .perks { list-style: none; padding: 0; margin: 20px auto; max-width: 320px; text-align: left; }
-        .perks li { padding: 8px 0; border-bottom: 1px solid #eee; }
-        .perks li::before { content: "✓ "; color: #00b894; font-weight: bold; }
-        .btn-pay { background: var(--premium); color: #000; border: none; padding: 14px 40px;
-                   border-radius: 50px; font-size: 1.1em; font-weight: bold; cursor: pointer; }
+        /* ---------- Premium page (matches home theme) ---------- */
+        .premium-wrap {
+            width: 100%;
+            max-width: 520px;
+            margin: 0 auto;
+        }
+        .premium-card {
+            background: rgba(255, 255, 255, 0.97);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            border-radius: 24px;
+            box-shadow: var(--shadow-lg);
+            padding: 40px 36px;
+            text-align: center;
+        }
+        .premium-card .card-head { margin-bottom: 18px; }
+
+        .greeting { color: var(--muted); margin: 0 0 6px; font-size: 0.98em; }
+
+        .price {
+            font-size: 3em;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            color: var(--primary);
+            margin: 6px 0 2px;
+        }
+        .price-note { color: var(--muted); font-size: 0.85em; margin: 0 0 18px; }
+        .price-dual { display: inline-block; margin-top: 6px; font-size: 0.95em; color: var(--slate); }
+
+        .perks {
+            list-style: none;
+            padding: 0;
+            margin: 18px auto 26px;
+            max-width: 340px;
+            text-align: left;
+        }
+        .perks li {
+            padding: 11px 4px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.98em;
+            color: var(--slate);
+        }
+        .perks li:last-child { border-bottom: none; }
+        .perks li::before {
+            content: "✓";
+            color: var(--success);
+            font-weight: 800;
+            background: rgba(16, 185, 129, 0.12);
+            width: 24px; height: 24px;
+            border-radius: 50%;
+            display: inline-grid;
+            place-items: center;
+            flex: 0 0 auto;
+            font-size: 0.85em;
+        }
+
+        .btn-pay {
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+            color: #1f2937;
+            border: none;
+            padding: 15px 44px;
+            border-radius: 30px;
+            font-size: 1.05em;
+            font-weight: 700;
+            font-family: inherit;
+            cursor: pointer;
+            box-shadow: 0 6px 16px rgba(245, 158, 11, 0.4);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn-pay:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 22px rgba(245, 158, 11, 0.5); }
         .btn-pay:disabled { opacity: 0.6; cursor: not-allowed; }
-        .messages { margin: 16px auto; max-width: 360px; }
+
+        .status-good { color: var(--success); font-weight: 700; margin: 10px 0 0; }
+        .status-bad { color: #d63031; margin: 10px 0 0; }
+
+        .messages { margin: 0 auto 18px; max-width: 380px; }
         .message-banner {
-            background: #f0ebfa; border: 1px solid #d9ccf3; color: #4a2b8c;
-            padding: 12px 16px; border-radius: 8px; font-size: 0.95em; line-height: 1.5;
+            background: #eef2ff;
+            border: 1px solid #c7d2fe;
+            color: var(--primary-dark);
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 0.92em;
+            line-height: 1.5;
             margin: 0 0 10px;
         }
+        .premium-foot { text-align: center; color: #fff; margin-top: 22px; font-size: 0.9em; }
+        .premium-foot a { color: #fff; font-weight: 600; }
     </style>
 </head>
 <body>
-<div class="container premium-card">
-    <header>
-        <h1>Go Premium</h1>
-        <a href="{% url 'home' %}" class="btn-premium">Back</a>
+<div class="hero-bg">
+
+    <!-- Top navigation -->
+    <nav class="topbar">
+        <div class="brand">
+            <span class="logo-mark">🗣️</span>
+            <span>SpeakFluent</span>
+        </div>
+        <div class="wallet-info">
+            <a href="{% url 'home' %}" class="btn-premium" style="background:rgba(255,255,255,0.18);color:#fff;box-shadow:none;border:1px solid rgba(255,255,255,0.3);">← Back to Home</a>
+        </div>
+    </nav>
+
+    <!-- Hero headline -->
+    <header class="hero-head">
+        <span class="eyebrow">Unlock Everything</span>
+        <h1>Go <span class="accent">Premium</span></h1>
+        <p>Get smarter matchmaking, unlimited call time, and the freedom to reconnect with partners you enjoyed talking to.</p>
     </header>
 
-    {% if messages %}
-    <div class="messages">
-        {% for message in messages %}
-        <p class="message-banner">{{ message }}</p>
-        {% endfor %}
-    </div>
-    {% endif %}
+    <main class="premium-wrap">
+        <div class="premium-card">
+            {% if messages %}
+            <div class="messages">
+                {% for message in messages %}
+                <p class="message-banner">{{ message }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
 
-    <p>Hi {{ profile.display_name }}, unlock premium matchmaking.</p>
-    <div class="price">₹500</div>
+            <div class="card-head">
+                <h2>Premium Membership</h2>
+            </div>
 
-    <ul class="perks">
-        <li>Filter matches by sex &amp; profession</li>
-        <li>Unlimited call duration</li>
-        <li>Reconnect with your last match</li>
-        <li>₹500 wallet credit</li>
-    </ul>
+            <p class="greeting">Hi {{ profile.display_name }}, unlock premium matchmaking.</p>
+            <div class="price">{{ premium_symbol }}{{ premium_price }}</div>
+            <p class="price-note">
+                Daily pass · valid until midnight<br>
+                <span class="price-dual">₹{{ premium_price_inr }} per day in India · ${{ premium_price_usd }} per day worldwide</span>
+            </p>
 
-    {% if profile.is_premium %}
-        <p style="color:#00b894; font-weight:bold;">You are already a Premium member 🎉</p>
-    {% elif payment %}
-        <button id="pay-btn" class="btn-pay">Pay with UPI / Card</button>
-        <form id="success-form" method="POST" action="{% url 'payment_success' %}" style="display:none;">
-            {% csrf_token %}
-            <input type="hidden" name="razorpay_order_id" id="rzp_order_id">
-            <input type="hidden" name="razorpay_payment_id" id="rzp_payment_id">
-            <input type="hidden" name="razorpay_signature" id="rzp_signature">
-        </form>
-        <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-        <script>
-            const options = {
-                key: "{{ razorpay_key }}",
-                amount: "{{ payment.amount }}",
-                currency: "{{ payment.currency }}",
-                name: "Anonymous Connect",
-                description: "Premium Membership",
-                order_id: "{{ payment.id }}",
-                handler: function (response) {
-                    // Pass the gateway response back so the server can verify
-                    // the signature before granting premium.
-                    document.getElementById('rzp_order_id').value = response.razorpay_order_id;
-                    document.getElementById('rzp_payment_id').value = response.razorpay_payment_id;
-                    document.getElementById('rzp_signature').value = response.razorpay_signature;
-                    document.getElementById('success-form').submit();
-                },
-                theme: { color: "#6c5ce7" }
-            };
-            const rzp = new Razorpay(options);
-            document.getElementById('pay-btn').onclick = function (e) {
-                e.preventDefault();
-                rzp.open();
-            };
-        </script>
-    {% else %}
-        <p style="color:#d63031;">Payment gateway is not configured yet. Please try again later.</p>
-    {% endif %}
+            <ul class="perks">
+                <li>Filter matches by sex, profession &amp; age</li>
+                <li>Unlimited call duration</li>
+                <li>Reconnect with your last match</li>
+                <li>Higher daily reconnect allowance</li>
+            </ul>
+
+            {% if premium_active %}
+                <p class="status-good">Your Premium pass is active today 🎉</p>
+            {% elif payment %}
+                <button id="pay-btn" class="btn-pay">Pay with UPI / Card</button>
+                <form id="success-form" method="POST" action="{% url 'payment_success' %}" style="display:none;">
+                    {% csrf_token %}
+                    <input type="hidden" name="razorpay_order_id" id="rzp_order_id">
+                    <input type="hidden" name="razorpay_payment_id" id="rzp_payment_id">
+                    <input type="hidden" name="razorpay_signature" id="rzp_signature">
+                </form>
+                <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+                <script>
+                    const options = {
+                        key: "{{ razorpay_key }}",
+                        amount: "{{ payment.amount }}",
+                        currency: "{{ payment.currency }}",
+                        name: "SpeakFluent",
+                        description: "Premium Membership",
+                        order_id: "{{ payment.id }}",
+                        handler: function (response) {
+                            // Pass the gateway response back so the server can verify
+                            // the signature before granting premium.
+                            document.getElementById('rzp_order_id').value = response.razorpay_order_id;
+                            document.getElementById('rzp_payment_id').value = response.razorpay_payment_id;
+                            document.getElementById('rzp_signature').value = response.razorpay_signature;
+                            document.getElementById('success-form').submit();
+                        },
+                        theme: { color: "#4f46e5" }
+                    };
+                    const rzp = new Razorpay(options);
+                    document.getElementById('pay-btn').onclick = function (e) {
+                        e.preventDefault();
+                        rzp.open();
+                    };
+                </script>
+            {% else %}
+                <p class="status-bad">Payment gateway is not configured yet. Please try again later.</p>
+            {% endif %}
+        </div>
+
+        <p class="premium-foot">
+            Not now? <a href="{% url 'home' %}">Return to home</a>
+        </p>
+    </main>
+
+    {% include "chat/_policy_footer.html" %}
+
 </div>
 </body>
 </html>

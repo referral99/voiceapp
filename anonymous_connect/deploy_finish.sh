@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+git congig --global u#!/usr/bin/env bash
 # ---------------------------------------------------------------------------
 # Finish deployment of Anonymous Connect on Amazon Linux 2023.
 # Idempotent: safe to re-run. Assumes system packages, Postgres, Redis, the

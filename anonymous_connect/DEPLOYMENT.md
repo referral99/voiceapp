@@ -66,6 +66,40 @@ General steps (any provider):
    (many platforms do this automatically for Django; otherwise add it to the
    build command). WhiteNoise serves the collected files.
 
+### EC2 (self-managed) — decentapp.org
+
+This repo is deployed on an EC2 instance (public IP `13.60.20.71`) behind
+Nginx, served from the domain **decentapp.org**. The `deploy_finish.sh` script
+is idempotent and does the whole wiring: writes the production `.env`, runs
+migrations + `collectstatic`, installs a systemd unit for Daphne, configures
+the Nginx reverse proxy (HTTP + WebSocket) with `server_name decentapp.org
+www.decentapp.org`, and provisions a Let's Encrypt TLS certificate via Certbot.
+
+Prerequisites before running the script:
+
+1. **DNS**: add `A` records for `decentapp.org` and `www.decentapp.org`
+   pointing to `13.60.20.71`. Wait for them to resolve.
+2. **Security Group**: allow inbound TCP **80** and **443**.
+
+Then, on the box:
+
+```bash
+cd /home/ec2-user/voice/voiceapp/anonymous_connect
+git pull
+# optional: set the Let's Encrypt contact email (defaults to admin@decentapp.org)
+export CERTBOT_EMAIL=you@example.com
+./deploy_finish.sh
+```
+
+Notes:
+- The script turns on `SECURE_SSL_REDIRECT` and secure cookies automatically
+  when TLS is enabled, and sets `CSRF_TRUSTED_ORIGINS=https://decentapp.org,...`.
+- If DNS isn't ready yet, run with TLS disabled to come up on plain HTTP first:
+  `ENABLE_TLS=0 ./deploy_finish.sh`, then re-run normally once DNS resolves.
+- Certbot installs an auto-renew timer, so the cert renews itself.
+- **Voice calls require HTTPS** — on a real domain `getUserMedia` only works in
+  a secure context, so finishing the TLS step is required for voice to work.
+
 ### Railway / Render quick notes
 - Build command: `pip install -r requirements.txt && python manage.py collectstatic --noinput`
 - Start command: `daphne -b 0.0.0.0 -p $PORT anonymous_connect.asgi:application`
@@ -75,7 +109,10 @@ General steps (any provider):
 ## 4. Post-deploy checklist
 
 - [ ] `DJANGO_DEBUG=False` and a unique `DJANGO_SECRET_KEY` are set.
-- [ ] `DJANGO_ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS` match your domain.
+- [ ] `DJANGO_ALLOWED_HOSTS` includes `decentapp.org,www.decentapp.org` (and the
+      EC2 IP) and `CSRF_TRUSTED_ORIGINS` is `https://decentapp.org,https://www.decentapp.org`.
+- [ ] DNS A records for `decentapp.org` / `www.decentapp.org` point to `13.60.20.71`.
+- [ ] EC2 Security Group allows inbound TCP 80 and 443.
 - [ ] `REDIS_URL` points to a running Redis instance.
 - [ ] Database migrations ran (`release` phase or manual `migrate`).
 - [ ] `GET /healthz/` returns HTTP 200.

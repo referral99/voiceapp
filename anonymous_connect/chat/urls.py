@@ -36,6 +36,9 @@ urlpatterns = [
     # Health / readiness probe for cloud platforms
     path('healthz/', views.healthz, name='healthz'),
 
+    # Short-lived WebRTC ICE servers (STUN + Cloudflare TURN) for voice calls.
+    path('ice-servers/', views.ice_servers, name='ice_servers'),
+
     # Mandatory policy pages (linked from the footer for Razorpay activation)
     path('privacy-policy/', views.privacy_policy, name='privacy_policy'),
     path('terms-and-conditions/', views.terms_conditions, name='terms_conditions'),

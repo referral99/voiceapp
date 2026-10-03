@@ -664,7 +664,34 @@
     }, 1000);
 
     // 4. WebRTC helpers (voice).
-    const rtcConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+    // Start with a STUN-only fallback. Before the first call we fetch
+    // short-lived ICE servers (STUN + Cloudflare TURN) from the backend so
+    // calls also connect across symmetric NATs / strict firewalls. The TURN
+    // secrets never touch the browser - the server mints per-call credentials.
+    let rtcConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+    let iceServersReady = false;
+
+    async function ensureIceServers() {
+        if (iceServersReady) return;
+        try {
+            const resp = await fetch("{% url 'ice_servers' %}", {
+                headers: { 'Accept': 'application/json' },
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                if (data && Array.isArray(data.iceServers) && data.iceServers.length) {
+                    rtcConfig = { iceServers: data.iceServers };
+                }
+            } else {
+                console.warn('ICE servers fetch returned', resp.status, '- using STUN fallback');
+            }
+        } catch (err) {
+            console.warn('ICE servers fetch failed, using STUN fallback:', err);
+        }
+        // Mark ready regardless so a failed fetch doesn't block the call; we
+        // simply fall back to the STUN-only config above.
+        iceServersReady = true;
+    }
 
     const voiceBanner = document.getElementById('voice-banner');
     const voiceBannerText = document.getElementById('voice-banner-text');
@@ -697,6 +724,9 @@
             }
         }
         if (createPeer && !peerConnection) {
+            // Make sure we have the freshest ICE servers (TURN) before the
+            // RTCPeerConnection is created; falls back to STUN if unavailable.
+            await ensureIceServers();
             peerConnection = new RTCPeerConnection(rtcConfig);
             localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 

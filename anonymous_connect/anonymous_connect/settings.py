@@ -5,7 +5,10 @@ Configured to run out-of-the-box locally (SQLite + in-memory channel layer)
 and to be deployment-ready on a cheap cloud host via environment variables.
 """
 import os
+import sys
 from pathlib import Path
+
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -50,6 +53,11 @@ SECRET_KEY = os.environ.get(
     'DJANGO_SECRET_KEY',
     'django-insecure-7imxz52l-!8zwg-r65zc%!g88i14gm6q((-$#a6-up#v#_-$+x',
 )
+
+# True while running the test suite (``manage.py test``). Used to neutralise
+# production-only settings (HTTPS redirect, strict hosts) so tests are
+# deterministic regardless of any ambient environment variables on the machine.
+RUNNING_TESTS = 'test' in sys.argv
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env_bool('DJANGO_DEBUG', True)
@@ -150,7 +158,12 @@ CONN_MAX_AGE = 60
 
 # Channel layers
 # Uses Redis when REDIS_URL is set, otherwise an in-memory layer for local dev.
-# NOTE: the in-memory layer only works with a single process; use Redis in prod.
+#
+# IMPORTANT: InMemoryChannelLayer is per-process only. With more than one
+# worker/instance, two matched users can land on different processes and
+# group_send() will never reach the other side (no messages / no WebRTC
+# signalling). Production MUST use the Redis layer so every process shares
+# the same bus. We therefore require REDIS_URL whenever DEBUG is off.
 REDIS_URL = os.environ.get('REDIS_URL')
 if REDIS_URL:
     CHANNEL_LAYERS = {
@@ -161,12 +174,19 @@ if REDIS_URL:
             },
         },
     }
-else:
+elif DEBUG:
+    # Local single-process development only.
     CHANNEL_LAYERS = {
         'default': {
             'BACKEND': 'channels.layers.InMemoryChannelLayer',
         },
     }
+else:
+    raise ImproperlyConfigured(
+        'REDIS_URL must be set in production. The in-memory channel layer '
+        'is per-process and breaks messaging/WebRTC signalling across '
+        'multiple workers or instances.'
+    )
 
 
 # Password validation
@@ -205,6 +225,16 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Razorpay (payments). Leave blank to disable the payment gateway gracefully.
 RAZOR_KEY_ID = os.environ.get('RAZOR_KEY_ID', '')
 RAZOR_KEY_SECRET = os.environ.get('RAZOR_KEY_SECRET', '')
+
+# Cloudflare Realtime TURN (WebRTC relay for voice calls).
+# The TURN key ID and its API token are long-term secrets kept server-side.
+# The backend uses them to mint short-lived ICE credentials for each call
+# (see chat.views.ice_servers). Leave blank to fall back to STUN-only.
+CLOUDFLARE_TURN_KEY_ID = os.environ.get('CLOUDFLARE_TURN_KEY_ID', '')
+CLOUDFLARE_TURN_API_TOKEN = os.environ.get('CLOUDFLARE_TURN_API_TOKEN', '')
+# How long issued TURN credentials remain valid, in seconds. Should comfortably
+# exceed the longest expected call (default: 24h).
+CLOUDFLARE_TURN_TTL = int(os.environ.get('CLOUDFLARE_TURN_TTL', '86400'))
 
 # Twilio (OTP SMS). Leave blank to fall back to logging the OTP (dev mode).
 TWILIO_SID = os.environ.get('TWILIO_SID', '')
@@ -269,6 +299,18 @@ if not DEBUG:
     SECURE_HSTS_PRELOAD = env_bool('SECURE_HSTS_PRELOAD', True)
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'DENY'
+
+
+# Keep the test suite deterministic. The Django test client talks plain HTTP to
+# "testserver", so a production SSL redirect or a strict ALLOWED_HOSTS list
+# (which can leak in from the machine's environment variables) would turn every
+# request into a 301/400 and break otherwise-valid tests. Neutralise them while
+# running tests only; production behaviour is unaffected.
+if RUNNING_TESTS:
+    SECURE_SSL_REDIRECT = False
+    ALLOWED_HOSTS = ['testserver', 'localhost', '127.0.0.1']
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
 
 
 # --- Logging ---

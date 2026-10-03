@@ -849,6 +849,61 @@ def healthz(request):
     return JsonResponse({'status': 'ok' if db_ok else 'unhealthy', 'database': db_ok}, status=status_code)
 
 
+# --- WebRTC TURN credentials ---
+
+# Fallback used when Cloudflare TURN isn't configured: STUN only. STUN works for
+# peers on permissive networks but fails behind symmetric NAT / strict
+# firewalls, which is exactly why we prefer TURN in production.
+_STUN_ONLY_ICE_SERVERS = [{'urls': ['stun:stun.l.google.com:19302']}]
+
+
+def ice_servers(request):
+    """Return short-lived WebRTC ICE servers (STUN + Cloudflare TURN) as JSON.
+
+    The TURN key ID and API token are long-term secrets that MUST stay on the
+    server. We call Cloudflare's Realtime API here to mint a short-lived TURN
+    credential for this specific call, then hand the resulting ``iceServers``
+    list to the browser. If TURN isn't configured or the API call fails, we
+    gracefully fall back to STUN-only so calls still work on good networks.
+    """
+    from django.http import JsonResponse
+
+    key_id = getattr(settings, 'CLOUDFLARE_TURN_KEY_ID', '')
+    api_token = getattr(settings, 'CLOUDFLARE_TURN_API_TOKEN', '')
+    ttl = getattr(settings, 'CLOUDFLARE_TURN_TTL', 86400)
+
+    # No TURN configured -> STUN only.
+    if not (key_id and api_token):
+        return JsonResponse({'iceServers': _STUN_ONLY_ICE_SERVERS})
+
+    try:
+        import requests
+
+        resp = requests.post(
+            f'https://rtc.live.cloudflare.com/v1/turn/keys/{key_id}/credentials/generate-ice-servers',
+            headers={
+                'Authorization': f'Bearer {api_token}',
+                'Content-Type': 'application/json',
+            },
+            json={'ttl': ttl},
+            timeout=5,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        ice = data.get('iceServers')
+        if ice:
+            # Cloudflare may return a single object or a list; normalise to list.
+            if isinstance(ice, dict):
+                ice = [ice]
+            return JsonResponse({'iceServers': ice})
+        logger.error("Cloudflare TURN response missing iceServers: %s", data)
+    except Exception as exc:  # noqa: BLE001 - never let TURN break the call page
+        logger.error("Cloudflare TURN credential generation failed: %s", exc)
+
+    # Any failure -> safe STUN-only fallback.
+    return JsonResponse({'iceServers': _STUN_ONLY_ICE_SERVERS})
+
+
 # --- Legal / policy pages (required for Razorpay activation) ---
 # These are static informational pages. Their links live in the shared footer
 # (chat/_policy_footer.html) so every public page exposes them, which is what

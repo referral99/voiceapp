@@ -283,6 +283,7 @@ class ConnectLastUserTests(TestCase):
         self.client.force_login(self.user)
         p = self.user.profile
         p.is_premium = True
+        p.premium_expiry = timezone.now() + timedelta(hours=1)
         p.last_connected_session = None
         p.save()
         resp = self.client.get(reverse('connect_last_user'))
@@ -292,6 +293,7 @@ class ConnectLastUserTests(TestCase):
         self.client.force_login(self.user)
         p = self.user.profile
         p.is_premium = True
+        p.premium_expiry = timezone.now() + timedelta(hours=1)
         p.last_connected_session = 'nonexistent-session'
         p.save()
         resp = self.client.get(reverse('connect_last_user'))
@@ -302,6 +304,7 @@ class ConnectLastUserTests(TestCase):
         partner = UserProfile.objects.create(session_id='partner-xyz', display_name='Partner')
         p = self.user.profile
         p.is_premium = True
+        p.premium_expiry = timezone.now() + timedelta(hours=1)
         p.last_connected_session = 'partner-xyz'
         p.save()
         resp = self.client.get(reverse('connect_last_user'))
@@ -345,6 +348,7 @@ class PremiumPageTests(TestCase):
         self.client.force_login(self.user)
         p = self.user.profile
         p.is_premium = True
+        p.premium_expiry = timezone.now() + timedelta(hours=1)
         p.save()
         resp = self.client.get(reverse('premium_page'))
         self.assertEqual(resp.status_code, 200)
@@ -386,7 +390,8 @@ class PaymentSuccessTests(TestCase):
         profile = self.user.profile
         profile.refresh_from_db()
         self.assertTrue(profile.is_premium)
-        self.assertEqual(profile.wallet_balance, 500)
+        # Premium is a daily pass; paying for it does not top up the wallet.
+        self.assertEqual(profile.wallet_balance, 0)
         txn = Transaction.objects.get(razorpay_order_id='order_1')
         self.assertEqual(txn.status, 'Success')
         self.assertEqual(txn.razorpay_payment_id, 'pay_1')
@@ -505,7 +510,10 @@ class EmailOtpFlowTests(TestCase):
         self.client.post(reverse('send_email_otp'), {'email': 'bob@example.com'})
         resp = self.client.post(reverse('verify_email_otp'), {'otp': '000000'})
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.context['error'], 'Invalid OTP')
+        self.assertEqual(
+            resp.context['error'],
+            'That code is incorrect. Please check and try again.',
+        )
         self.assertFalse(User.objects.filter(username='email_bob@example.com').exists())
 
     def test_verify_email_otp_get_redirects_login(self):

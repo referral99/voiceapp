@@ -1176,3 +1176,75 @@ def contact_us(request):
 
 def service_fulfillment(request):
     return render(request, 'chat/legal/service_fulfillment.html')
+
+
+# ---------------------------------------------------------------------------
+# Activity report dashboard (/report.html)
+#
+# A password-protected analytics page built from the activity log. It is hidden
+# entirely (404) unless settings.REPORT_ENABLED is True, and gated behind HTTP
+# Basic Auth (settings.REPORT_USERNAME / REPORT_PASSWORD) when it is enabled.
+# ---------------------------------------------------------------------------
+import base64
+import hmac
+
+from django.http import HttpResponse, Http404
+
+
+def _report_auth_ok(request):
+    """Validate the Basic Auth header against the configured credentials.
+
+    Returns True only when a username+password are configured AND the request
+    presents matching credentials. Comparisons use hmac.compare_digest to avoid
+    leaking timing information.
+    """
+    expected_user = getattr(settings, 'REPORT_USERNAME', '') or ''
+    expected_pass = getattr(settings, 'REPORT_PASSWORD', '') or ''
+
+    # If no password is configured, access is never granted - fail closed.
+    if not expected_pass:
+        return False
+
+    header = request.META.get('HTTP_AUTHORIZATION', '')
+    if not header.startswith('Basic '):
+        return False
+
+    try:
+        raw = base64.b64decode(header.split(' ', 1)[1].strip()).decode('utf-8')
+        username, _, password = raw.partition(':')
+    except (ValueError, UnicodeDecodeError):
+        return False
+
+    user_ok = hmac.compare_digest(username, expected_user)
+    pass_ok = hmac.compare_digest(password, expected_pass)
+    return user_ok and pass_ok
+
+
+def report_dashboard(request):
+    """Render the password-protected activity report at /report.html.
+
+    * 404 when the feature flag (REPORT_ENABLED) is off, so the URL is
+      indistinguishable from a non-existent page.
+    * 401 + WWW-Authenticate prompt until valid Basic Auth credentials arrive.
+    * Supports ?month=YYYY-MM to switch the reporting month.
+    """
+    if not getattr(settings, 'REPORT_ENABLED', False):
+        raise Http404()
+
+    if not _report_auth_ok(request):
+        response = HttpResponse('Authentication required.', status=401)
+        response['WWW-Authenticate'] = 'Basic realm="Activity Report", charset="UTF-8"'
+        return response
+
+    # Import lazily so the log-parsing dependency only loads when the report is
+    # actually requested (and the rest of the app never pays for it).
+    from .report_analytics import build_report_data
+
+    month = request.GET.get('month') or None
+    try:
+        data = build_report_data(month=month)
+    except Exception:  # noqa: BLE001 - never 500 the dashboard on a bad log line
+        logger.exception('Failed to build activity report')
+        data = None
+
+    return render(request, 'chat/report.html', {'report': data, 'error': data is None})

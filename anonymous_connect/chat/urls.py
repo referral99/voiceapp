@@ -37,6 +37,10 @@ urlpatterns = [
     # Callback URL for successful UPI payments
     path('payment/success/', views.payment_success, name='payment_success'),
 
+    # Password-protected activity report dashboard (hidden unless REPORT_ENABLED).
+    # Served at /report.html to match the shared link.
+    path('report.html', views.report_dashboard, name='report_dashboard'),
+
     # Health / readiness probe for cloud platforms
     path('healthz/', views.healthz, name='healthz'),
 

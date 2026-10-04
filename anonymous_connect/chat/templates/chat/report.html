@@ -1,0 +1,325 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Activity Report{% if report %} - {{ report.month }}{% endif %}</title>
+    <style>
+        :root {
+            --bg: #0f1420;
+            --panel: #1a2130;
+            --panel-2: #212a3d;
+            --ink: #e8edf6;
+            --muted: #93a1bd;
+            --accent: #4f8cff;
+            --accent-2: #22c3a6;
+            --border: #2b3550;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--ink);
+            line-height: 1.5;
+        }
+        header {
+            padding: 24px 28px;
+            background: linear-gradient(135deg, #182033, #10151f);
+            border-bottom: 1px solid var(--border);
+        }
+        header h1 { margin: 0 0 6px; font-size: 22px; }
+        header .meta { color: var(--muted); font-size: 13px; }
+        .wrap { padding: 24px 28px; max-width: 1200px; margin: 0 auto; }
+        .month-switch { margin: 14px 0 0; }
+        .month-switch a {
+            display: inline-block;
+            padding: 4px 10px;
+            margin: 2px 4px 2px 0;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--muted);
+            text-decoration: none;
+            font-size: 12px;
+        }
+        .month-switch a.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 14px;
+            margin: 8px 0 28px;
+        }
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px 18px;
+        }
+        .card .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+        .card .value { font-size: 28px; font-weight: 700; margin-top: 6px; }
+        .card .value.accent { color: var(--accent-2); }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 820px) { .grid-2 { grid-template-columns: 1fr; } }
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 18px 20px;
+            margin-bottom: 20px;
+        }
+        .panel h2 { margin: 0 0 14px; font-size: 16px; }
+        .panel h2 .hint { color: var(--muted); font-size: 12px; font-weight: 400; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+        th { color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: .03em; }
+        td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+        .scroll { max-height: 320px; overflow: auto; }
+        .empty { color: var(--muted); font-style: italic; padding: 10px 0; }
+        canvas { max-width: 100%; }
+        footer { color: var(--muted); font-size: 12px; padding: 10px 28px 40px; max-width: 1200px; margin: 0 auto; }
+        code { background: var(--panel-2); padding: 1px 6px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+<header>
+    <h1>Activity Report</h1>
+    {% if report %}
+        <div class="meta">
+            Month <strong>{{ report.month }}</strong>
+            &nbsp;·&nbsp; Data range: {{ report.time_span|default:"no data" }}
+            &nbsp;·&nbsp; Generated {{ report.generated }}
+        </div>
+        {% if report.months_present %}
+        <div class="month-switch">
+            {% for m in report.months_present %}
+                <a href="?month={{ m }}" {% if m == report.month %}class="active"{% endif %}>{{ m }}</a>
+            {% endfor %}
+        </div>
+        {% endif %}
+    {% endif %}
+</header>
+
+<div class="wrap">
+{% if error or not report %}
+    <div class="panel">
+        <h2>No report available</h2>
+        <p class="empty">The activity log could not be read, or it contains no records yet.
+        Once users start visiting, metrics will appear here.</p>
+    </div>
+{% else %}
+
+    {# ---- Headline totals ---- #}
+    <div class="cards">
+        <div class="card">
+            <div class="label">Site visits</div>
+            <div class="value">{{ report.totals.visits }}</div>
+        </div>
+        <div class="card">
+            <div class="label">Unique visitors</div>
+            <div class="value">{{ report.totals.unique_visitors }}</div>
+        </div>
+        <div class="card">
+            <div class="label">Call hits (voice)</div>
+            <div class="value">{{ report.totals.voice_hits }}</div>
+        </div>
+        <div class="card">
+            <div class="label">Message hits</div>
+            <div class="value">{{ report.totals.msg_hits }}</div>
+        </div>
+        <div class="card">
+            <div class="label">Premium button clicks</div>
+            <div class="value">{{ report.totals.premium_clicks }}</div>
+        </div>
+        <div class="card">
+            <div class="label">Logged-in users</div>
+            <div class="value">{{ report.totals.logged_in_users }}</div>
+        </div>
+        <div class="card">
+            <div class="label">Paying users</div>
+            <div class="value accent">{{ report.totals.paying_users }}</div>
+        </div>
+        <div class="card">
+            <div class="label">Revenue</div>
+            <div class="value accent">{{ report.totals.revenue }}</div>
+        </div>
+    </div>
+
+    {# ---- Traffic per hour of day graph ---- #}
+    <div class="panel">
+        <h2>Traffic by hour of day <span class="hint">(site visits, 00:00–23:00 IST, for {{ report.month }})</span></h2>
+        <canvas id="hourChart" height="90"></canvas>
+    </div>
+
+    <div class="grid-2">
+        {# ---- Gender breakdown ---- #}
+        <div class="panel">
+            <h2>Visitors by gender
+                {% if not report.gender_enabled %}<span class="hint">(disabled)</span>{% endif %}
+            </h2>
+            {% if report.gender_enabled %}
+                {% if report.gender_counts %}
+                    <canvas id="genderChart" height="200"></canvas>
+                {% else %}
+                    <p class="empty">No gender selections recorded this month.</p>
+                {% endif %}
+            {% else %}
+                <p class="empty">Enable <code>REPORT_GENDER_BREAKDOWN</code> to compute this section.</p>
+            {% endif %}
+        </div>
+
+        {# ---- Country breakdown ---- #}
+        <div class="panel">
+            <h2>Visitors by country
+                {% if not report.geo_enabled %}<span class="hint">(geo lookup off)</span>{% endif %}
+            </h2>
+            {% if report.country_counts %}
+                <canvas id="countryChart" height="200"></canvas>
+            {% else %}
+                <p class="empty">No country data for this month.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ---- Per-hour timeline table ---- #}
+    <div class="panel">
+        <h2>Hourly traffic timeline <span class="hint">(visits per hour across the month)</span></h2>
+        {% if report.per_hour_rows %}
+        <div class="scroll">
+            <table>
+                <thead><tr><th>Hour</th><th class="num">Visits</th></tr></thead>
+                <tbody>
+                {% for row in report.per_hour_rows %}
+                    <tr><td>{{ row.hour }}</td><td class="num">{{ row.visits }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+            <p class="empty">No visits recorded this month.</p>
+        {% endif %}
+    </div>
+
+    {# ---- Payments ---- #}
+    <div class="panel">
+        <h2>Payments <span class="hint">(users who paid, with amounts)</span></h2>
+        {% if report.payments %}
+        <div class="scroll">
+            <table>
+                <thead>
+                    <tr><th>When (IST)</th><th>User</th><th>Order</th><th>Payment ID</th><th class="num">Amount</th></tr>
+                </thead>
+                <tbody>
+                {% for p in report.payments %}
+                    <tr>
+                        <td>{{ p.when }}</td>
+                        <td>{{ p.user }}</td>
+                        <td>{{ p.order_id }}</td>
+                        <td>{{ p.payment_id }}</td>
+                        <td class="num">{{ p.amount }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+            <p class="empty">No payments recorded this month.</p>
+        {% endif %}
+    </div>
+
+    {# ---- Logged-in users ---- #}
+    <div class="panel">
+        <h2>Logged-in users <span class="hint">(distinct authenticated accounts active this month)</span></h2>
+        {% if report.logged_in_user_ids %}
+            <div class="scroll">
+                <table>
+                    <thead><tr><th>User identifier</th></tr></thead>
+                    <tbody>
+                    {% for u in report.logged_in_user_ids %}
+                        <tr><td>{{ u }}</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="empty">No logged-in users this month.</p>
+        {% endif %}
+    </div>
+
+    {# ---- Chart data payloads (safely JSON-encoded by Django) ---- #}
+    {{ report.hour_of_day|json_script:"hour-data" }}
+    {% if report.gender_counts %}{{ report.gender_counts|json_script:"gender-data" }}{% endif %}
+    {% if report.country_counts %}{{ report.country_counts|json_script:"country-data" }}{% endif %}
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script>
+        (function () {
+            function readJSON(id) {
+                var el = document.getElementById(id);
+                if (!el) { return null; }
+                try { return JSON.parse(el.textContent); } catch (e) { return null; }
+            }
+
+            var tick = '#93a1bd', grid = 'rgba(139,161,189,0.15)';
+            Chart.defaults.color = tick;
+            Chart.defaults.font.family = "-apple-system, 'Segoe UI', Roboto, sans-serif";
+
+            // Traffic by hour of day (bar).
+            var hours = readJSON('hour-data');
+            if (hours) {
+                var labels = [];
+                for (var h = 0; h < 24; h++) {
+                    labels.push((h < 10 ? '0' + h : h) + ':00');
+                }
+                new Chart(document.getElementById('hourChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Visits',
+                            data: hours,
+                            backgroundColor: '#4f8cff',
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { grid: { color: grid } },
+                            y: { beginAtZero: true, grid: { color: grid }, ticks: { precision: 0 } }
+                        }
+                    }
+                });
+            }
+
+            var palette = ['#4f8cff', '#22c3a6', '#f6c744', '#ff6b6b', '#a06bff',
+                           '#ff9f45', '#2dd4bf', '#f472b6', '#60a5fa', '#9ca3af'];
+
+            function pie(canvasId, dataId) {
+                var obj = readJSON(dataId);
+                if (!obj) { return; }
+                var keys = Object.keys(obj);
+                var vals = keys.map(function (k) { return obj[k]; });
+                new Chart(document.getElementById(canvasId), {
+                    type: 'doughnut',
+                    data: {
+                        labels: keys,
+                        datasets: [{ data: vals, backgroundColor: palette, borderColor: '#1a2130', borderWidth: 2 }]
+                    },
+                    options: { plugins: { legend: { position: 'right' } } }
+                });
+            }
+
+            pie('genderChart', 'gender-data');
+            pie('countryChart', 'country-data');
+        })();
+    </script>
+{% endif %}
+</div>
+
+<footer>
+    Activity report · built from the server activity log · access is password protected.
+</footer>
+</body>
+</html>

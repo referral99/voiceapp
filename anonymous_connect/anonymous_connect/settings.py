@@ -223,6 +223,20 @@ STORAGES = {
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
+# --- Activity report (/report.html) ---
+# A password-protected HTML dashboard built from the activity log. Disabled by
+# default; flip REPORT_ENABLED on to expose it. REPORT_PASSWORD gates access via
+# HTTP Basic Auth (username is REPORT_USERNAME, default "admin"). Set
+# REPORT_GENDER_BREAKDOWN to compute the visitors-by-gender section.
+REPORT_ENABLED = env_bool('REPORT_ENABLED', False)
+REPORT_USERNAME = os.environ.get('REPORT_USERNAME', 'admin')
+REPORT_PASSWORD = os.environ.get('REPORT_PASSWORD', '')
+REPORT_GENDER_BREAKDOWN = env_bool('REPORT_GENDER_BREAKDOWN', True)
+# Resolve visitor IPs to countries using the on-disk cache / ip-api.com. Turn
+# off to keep the report fully offline (countries show as "Unresolved").
+REPORT_GEO_LOOKUP = env_bool('REPORT_GEO_LOOKUP', True)
+
+
 # Razorpay (payments). Leave blank to disable the payment gateway gracefully.
 RAZOR_KEY_ID = os.environ.get('RAZOR_KEY_ID', '')
 RAZOR_KEY_SECRET = os.environ.get('RAZOR_KEY_SECRET', '')

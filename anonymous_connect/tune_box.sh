@@ -43,9 +43,25 @@ echo "vm.vfs_cache_pressure=50" | sudo tee -a /etc/sysctl.d/99-anonymous-connect
 log "[2/4] Capping Redis memory at $REDIS_MAXMEM with allkeys-lru eviction"
 # Locate the redis config (Amazon Linux 2023 ships 'redis6').
 REDIS_CONF=""
-for c in /etc/redis6/redis6.conf /etc/redis/redis.conf /etc/redis.conf; do
-  if [ -f "$c" ]; then REDIS_CONF="$c"; break; fi
+# 1) Ask the running unit what config file it was started with.
+for u in redis6 redis redis-server; do
+  if systemctl list-unit-files 2>/dev/null | grep -q "^$u\.service"; then
+    cand=$(systemctl cat "$u" 2>/dev/null \
+      | grep -oE '/[^[:space:]]*redis[^[:space:]]*\.conf' | head -n1 || true)
+    if [ -n "$cand" ] && [ -f "$cand" ]; then REDIS_CONF="$cand"; break; fi
+  fi
 done
+# 2) Fall back to a wider set of common paths (note the flat /etc/redis6.conf).
+if [ -z "$REDIS_CONF" ]; then
+  for c in /etc/redis6/redis6.conf /etc/redis6.conf \
+           /etc/redis/redis.conf /etc/redis.conf; do
+    if [ -f "$c" ]; then REDIS_CONF="$c"; break; fi
+  done
+fi
+# 3) Last resort: search /etc.
+if [ -z "$REDIS_CONF" ]; then
+  REDIS_CONF=$(sudo find /etc -maxdepth 3 -iname '*redis*.conf' -type f 2>/dev/null | head -n1 || true)
+fi
 if [ -n "$REDIS_CONF" ]; then
   # Replace or append the two directives idempotently.
   sudo sed -i '/^\s*maxmemory\s/d; /^\s*maxmemory-policy\s/d' "$REDIS_CONF"
@@ -71,12 +87,27 @@ fi
 # 3. Postgres: shrink to fit a small shared box. Defaults assume a bigger host.
 # ---------------------------------------------------------------------------
 log "[3/4] Tuning Postgres for a small shared box"
-PG_CONF=$(sudo -u postgres psql -tAc 'SHOW config_file;' 2>/dev/null || true)
-if [ -z "$PG_CONF" ]; then
-  # Fall back to common Amazon Linux 2023 locations.
-  for c in /var/lib/pgsql/data/postgresql.conf /var/lib/pgsql/*/data/postgresql.conf; do
+# 1) Ask the running server directly (strip stray whitespace/newlines).
+PG_CONF=$(sudo -u postgres psql -tAc 'SHOW config_file;' 2>/dev/null | tr -d '[:space:]' || true)
+# 2) Ask the running process what data dir (-D) it was started with.
+if [ -z "$PG_CONF" ] || [ ! -f "$PG_CONF" ]; then
+  pg_datadir=$(ps -ww -C postgres -o args= 2>/dev/null \
+    | grep -oE '\-D[[:space:]]*[^ ]+' | head -n1 | sed -E 's/^-D[[:space:]]*//' || true)
+  if [ -n "$pg_datadir" ] && [ -f "$pg_datadir/postgresql.conf" ]; then
+    PG_CONF="$pg_datadir/postgresql.conf"
+  fi
+fi
+# 3) Fall back to common Amazon Linux 2023 locations (globs + versioned dirs).
+if [ -z "$PG_CONF" ] || [ ! -f "$PG_CONF" ]; then
+  for c in /var/lib/pgsql/data/postgresql.conf \
+           /var/lib/pgsql/*/data/postgresql.conf \
+           /var/lib/pgsql/*/data/postgresql.conf; do
     if [ -f "$c" ]; then PG_CONF="$c"; break; fi
   done
+fi
+# 4) Last resort: search the usual data roots.
+if [ -z "$PG_CONF" ] || [ ! -f "$PG_CONF" ]; then
+  PG_CONF=$(sudo find /var/lib/pgsql /etc/postgresql -maxdepth 4 -name 'postgresql.conf' -type f 2>/dev/null | head -n1 || true)
 fi
 if [ -n "$PG_CONF" ] && [ -f "$PG_CONF" ]; then
   set_pg() {

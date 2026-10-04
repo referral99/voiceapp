@@ -4,6 +4,14 @@ __pycache__/
 *.egg-info/
 .Python
 command.txt
+_proc.txt
+_summary.txt
+_verify.txt
+summary.txt
+detect_check.sh
+ip_country_cache.json
+activity_report.xlsx
+
 
 # Virtual environments
 venv/

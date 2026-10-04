@@ -4,7 +4,7 @@ Everything is funnelled through :func:`log_event`, which emits one line per
 user action to the ``activity`` logger. The line format is stable and
 machine-friendly so we can build reports from it later::
 
-    ACTIVITY action=visit ts=2026-10-03T18:04:56+05:30 user=guest:abcd1234 ip=1.2.3.4 ...
+    ACTIVITY action=visit ts=2026-10-03T18:04:56+05:30 user=guest:abcd1234 name=Tester ip=1.2.3.4 ...
 
 Design goals:
 * Separate from the rest of the app (lives in its own package).
@@ -80,6 +80,28 @@ def _user_identifier(request=None, profile=None):
     return "anonymous"
 
 
+def _display_name(request=None, profile=None):
+    """Best-effort human name the user entered in the webapp.
+
+    Reads ``UserProfile.display_name``. Prefers an explicitly supplied
+    ``profile``; otherwise falls back to the authenticated user's profile on
+    the request. Returns ``None`` when no usable name is available (which
+    ``log_event`` renders as ``-``).
+    """
+    try:
+        if profile is not None and getattr(profile, "display_name", None):
+            return profile.display_name
+
+        if request is not None:
+            user = getattr(request, "user", None)
+            prof = getattr(user, "profile", None) if user is not None else None
+            if prof is not None and getattr(prof, "display_name", None):
+                return prof.display_name
+    except Exception:  # noqa: BLE001 - name is best-effort only
+        pass
+    return None
+
+
 def _format_value(value):
     """Render a single field value for the key=value line."""
     if value is None:
@@ -109,6 +131,7 @@ def log_event(action, request=None, profile=None, **fields):
             f"action={_format_value(action)}",
             f"ts={_format_value(timezone.now().astimezone(IST).isoformat())}",
             f"user={_format_value(_user_identifier(request, profile))}",
+            f"name={_format_value(_display_name(request, profile))}",
             f"ip={_format_value(_client_ip(request))}",
         ]
         for key, value in fields.items():

@@ -4,7 +4,7 @@ Everything is funnelled through :func:`log_event`, which emits one line per
 user action to the ``activity`` logger. The line format is stable and
 machine-friendly so we can build reports from it later::
 
-    ACTIVITY action=visit ts=2026-10-03T12:34:56+00:00 user=guest:abcd1234 ip=1.2.3.4 ...
+    ACTIVITY action=visit ts=2026-10-03T18:04:56+05:30 user=guest:abcd1234 ip=1.2.3.4 ...
 
 Design goals:
 * Separate from the rest of the app (lives in its own package).
@@ -15,8 +15,13 @@ Design goals:
 """
 
 import logging
+from zoneinfo import ZoneInfo
 
 from django.utils import timezone
+
+# Render activity timestamps in Indian Standard Time (IST, UTC+05:30) so the
+# logs match the operator's local wall clock regardless of settings.TIME_ZONE.
+IST = ZoneInfo("Asia/Kolkata")
 
 # Dedicated logger. Its handlers/level are configured in settings.LOGGING under
 # the matching name, so it writes to its own file independent of app logs.
@@ -102,7 +107,7 @@ def log_event(action, request=None, profile=None, **fields):
     try:
         parts = [
             f"action={_format_value(action)}",
-            f"ts={_format_value(timezone.now().isoformat())}",
+            f"ts={_format_value(timezone.now().astimezone(IST).isoformat())}",
             f"user={_format_value(_user_identifier(request, profile))}",
             f"ip={_format_value(_client_ip(request))}",
         ]

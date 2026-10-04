@@ -4,6 +4,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.views.static import serve
 from chat.sitemaps import StaticViewSitemap
+from chat.views import robots_txt
 from django.contrib.sitemaps.views import sitemap
 
 
@@ -16,6 +17,7 @@ urlpatterns = [
     path('', include('chat.urls')),
     path('googled8b50b52752f6cc3.html', serve, {'document_root': settings.BASE_DIR, 'path': 'googled8b50b52752f6cc3.html'}),
     path('sitemap.xml', sitemap, {'sitemaps': sitemaps}, name='django.contrib.sitemaps.views.sitemap'),
+    path('robots.txt', robots_txt, name='robots_txt'),
 
 ]
 

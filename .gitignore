@@ -11,8 +11,8 @@ summary.txt
 detect_check.sh
 ip_country_cache.json
 activity_report.xlsx
-
-
+Notes.txt
+    
 # Virtual environments
 venv/
 env/

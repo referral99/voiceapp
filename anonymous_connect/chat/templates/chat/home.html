@@ -7,6 +7,54 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SpeakFluent — English Speaking Practice</title>
     <meta name="description" content="Practice spoken English with real partners through live voice calls and chat. Build fluency and confidence, one conversation at a time.">
+    <meta name="keywords" content="English speaking practice, spoken English, learn English, English conversation partner, voice chat, language exchange">
+
+    <!-- Canonical URL (prevents duplicate-content issues across www/non-www, http/https) -->
+    <link rel="canonical" href="{{ CANONICAL_URL }}">
+
+    <!-- Favicon (the icon shown in the browser tab). SVG for modern browsers,
+         PNG fallbacks for older ones and iOS home-screen. -->
+    <link rel="icon" type="image/svg+xml" href="{% static 'chat/images/favicon.svg' %}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{% static 'chat/images/favicon-32.png' %}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{% static 'chat/images/favicon-180.png' %}">
+    <meta name="theme-color" content="#4338ca">
+
+    <!-- Open Graph (link previews on WhatsApp, Facebook, LinkedIn, etc.) -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SpeakFluent">
+    <meta property="og:title" content="SpeakFluent — English Speaking Practice">
+    <meta property="og:description" content="Practice spoken English with real partners through live voice calls and chat. Build fluency and confidence, one conversation at a time.">
+    <meta property="og:url" content="{{ CANONICAL_URL }}">
+    <meta property="og:image" content="{{ SITE_URL }}{% static 'chat/images/og-image.png' %}">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="SpeakFluent — practice spoken English with real partners">
+
+    <!-- Twitter / X card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="SpeakFluent — English Speaking Practice">
+    <meta name="twitter:description" content="Practice spoken English with real partners through live voice calls and chat.">
+    <meta name="twitter:image" content="{{ SITE_URL }}{% static 'chat/images/og-image.png' %}">
+
+    <!-- Structured data: tells Google this is a web application -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "SpeakFluent",
+      "url": "{{ SITE_URL }}/",
+      "description": "Practice spoken English with real partners through live voice calls and chat.",
+      "applicationCategory": "EducationalApplication",
+      "operatingSystem": "Web",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      }
+    }
+    </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">

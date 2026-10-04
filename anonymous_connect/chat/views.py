@@ -1178,6 +1178,28 @@ def service_fulfillment(request):
     return render(request, 'chat/legal/service_fulfillment.html')
 
 
+def robots_txt(request):
+    """Serve /robots.txt so crawlers know what to index and where the sitemap
+    lives. Points at the absolute sitemap URL built from settings.SITE_URL."""
+    from django.http import HttpResponse as _HttpResponse
+
+    site_url = getattr(settings, 'SITE_URL', '').rstrip('/')
+    lines = [
+        'User-agent: *',
+        'Allow: /',
+        # Keep crawlers out of auth/account and transactional endpoints.
+        'Disallow: /accounts/',
+        'Disallow: /login/',
+        'Disallow: /admin/',
+        'Disallow: /premium/',
+        'Disallow: /payment/',
+        'Disallow: /report.html',
+        '',
+        f'Sitemap: {site_url}/sitemap.xml',
+    ]
+    return _HttpResponse('\n'.join(lines) + '\n', content_type='text/plain')
+
+
 # ---------------------------------------------------------------------------
 # Activity report dashboard (/report.html)
 #

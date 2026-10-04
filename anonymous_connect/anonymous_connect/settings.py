@@ -68,6 +68,12 @@ ALLOWED_HOSTS = env_list('DJANGO_ALLOWED_HOSTS', '*') or ['*']
 # e.g. CSRF_TRUSTED_ORIGINS="https://myapp.example.com"
 CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS', '')
 
+# Public, canonical base URL of the site (no trailing slash). Used to build
+# absolute URLs for SEO tags: canonical link, Open Graph / Twitter share URLs
+# and images, and JSON-LD. Set SITE_URL in production env to the real domain,
+# e.g. SITE_URL=https://decentapp.org
+SITE_URL = os.environ.get('SITE_URL', 'https://decentapp.org').rstrip('/')
+
 
 # Application definition
 
@@ -116,6 +122,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'chat.context_processors.seo',
             ],
         },
     },

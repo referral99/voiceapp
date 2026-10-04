@@ -12,7 +12,7 @@ from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
 from django.db import connection, transaction
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
 from django.views.decorators.http import require_POST
@@ -745,8 +745,98 @@ def custom_login(request):
 # --- Email OTP login (active) -------------------------------------------------
 
 # How long an emailed OTP stays valid, in seconds. Email can take a minute or
-# two to arrive, so give the user a realistic 10-minute window to enter it.
-EMAIL_OTP_TTL_SECONDS = 600
+# two to arrive, so give the user a realistic 5-minute window to enter it.
+EMAIL_OTP_TTL_SECONDS = 300
+
+
+def _build_otp_email(otp):
+    """Build the OTP email content.
+
+    Returns a ``(subject, text_body, html_body)`` tuple. The plain-text body is
+    the fallback for clients that don't render HTML; the HTML body is a formal,
+    branded layout that most inboxes will show. Keeping both in one place makes
+    the email easy to reword later.
+    """
+    validity_minutes = EMAIL_OTP_TTL_SECONDS // 60
+
+    subject = 'Your SpeakFluent verification code'
+
+    text_body = (
+        'Hello,\n\n'
+        'Use the verification code below to sign in to your SpeakFluent '
+        'account.\n\n'
+        f'    {otp}\n\n'
+        f'This code is valid for {validity_minutes} minutes. For your security, '
+        'please do not share it with anyone.\n\n'
+        'If you did not request this code, you can safely ignore this email.\n\n'
+        'Thank you,\n'
+        'The SpeakFluent Team'
+    )
+
+    # Inline styles only - email clients strip <style> blocks and external CSS.
+    html_body = f"""\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{subject}</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f1f5f9; font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#1e293b;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f1f5f9; padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px; background-color:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 6px 24px rgba(15,23,42,0.08);">
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#4f46e5,#4338ca); padding:28px 32px; text-align:center;">
+              <div style="font-size:22px; font-weight:700; color:#ffffff; letter-spacing:0.2px;">
+                <span style="font-size:24px; vertical-align:middle;">&#128483;&#65039;</span>
+                SpeakFluent
+              </div>
+            </td>
+          </tr>
+          <!-- Body -->
+          <tr>
+            <td style="padding:36px 32px 8px;">
+              <h1 style="margin:0 0 12px; font-size:20px; font-weight:700; color:#0f172a;">Verify your email</h1>
+              <p style="margin:0 0 24px; font-size:15px; line-height:1.6; color:#475569;">
+                Hello,<br>
+                Use the verification code below to sign in to your SpeakFluent account.
+              </p>
+              <!-- OTP box -->
+              <div style="margin:0 0 24px; padding:20px; text-align:center; background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:12px;">
+                <div style="font-size:34px; font-weight:700; letter-spacing:10px; color:#4f46e5; font-family:'Courier New',monospace;">{otp}</div>
+              </div>
+              <p style="margin:0 0 16px; font-size:14px; line-height:1.6; color:#475569;">
+                This code is valid for <strong>{validity_minutes} minutes</strong>. For your security, please do not share it with anyone.
+              </p>
+              <p style="margin:0 0 8px; font-size:13px; line-height:1.6; color:#94a3b8;">
+                If you did not request this code, you can safely ignore this email.
+              </p>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="padding:24px 32px 32px;">
+              <hr style="border:none; border-top:1px solid #e2e8f0; margin:0 0 16px;">
+              <p style="margin:0; font-size:13px; line-height:1.6; color:#64748b;">
+                Thank you,<br>
+                <strong>The SpeakFluent Team</strong>
+              </p>
+            </td>
+          </tr>
+        </table>
+        <p style="max-width:480px; margin:16px auto 0; font-size:12px; color:#94a3b8; text-align:center;">
+          This is an automated message, please do not reply.
+        </p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>"""
+
+    return subject, text_body, html_body
 
 
 def send_email_otp(request):
@@ -790,18 +880,21 @@ def send_email_otp(request):
     logger.info("Email OTP for %s is %s (backend=%s)", email, otp, settings.EMAIL_BACKEND)
 
     # Deliver the code. If sending fails (e.g. SMTP misconfigured), fall back to
-    # logging it so development logins still work.
+    # logging it so development logins still work. We send a formal, branded
+    # email with an HTML body plus a plain-text fallback for non-HTML clients.
     sent = True
     try:
-        delivered = send_mail(
-            subject='Your SpeakFluent verification code',
-            message=f'Your SpeakFluent verification code is {otp}. It expires shortly.',
+        subject, text_body, html_body = _build_otp_email(otp)
+        message = EmailMultiAlternatives(
+            subject=subject,
+            body=text_body,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[email],
-            fail_silently=False,
+            to=[email],
         )
-        # send_mail returns the number of messages delivered. If it reports 0 the
+        message.attach_alternative(html_body, 'text/html')
+        # send() returns the number of messages delivered. If it reports 0 the
         # backend accepted the call but sent nothing, so treat that as a failure.
+        delivered = message.send(fail_silently=False)
         if not delivered:
             logger.error("Email OTP to %s reported 0 messages delivered", email)
             sent = False

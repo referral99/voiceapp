@@ -92,7 +92,7 @@
             </div>
 
             {% if email %}<p class="otp-target">Sent to: <b>{{ email }}</b></p>{% endif %}
-            <p class="otp-target">This code is valid for 2 minutes.</p>
+            <p class="otp-target">This code is valid for 5 minutes.</p>
             {% if email_sent is False %}<p class="otp-target" style="color:#b45309;">Email could not be sent — check the server log for your code (development mode).</p>{% endif %}
 
             <form method="POST" action="{% url 'verify_email_otp' %}">

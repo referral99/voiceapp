@@ -109,6 +109,8 @@ fi
 if [ -z "$PG_CONF" ] || [ ! -f "$PG_CONF" ]; then
   PG_CONF=$(sudo find /var/lib/pgsql /etc/postgresql -maxdepth 4 -name 'postgresql.conf' -type f 2>/dev/null | head -n1 || true)
 fi
+# Diagnostic: show exactly what we resolved (helps confirm which script ran).
+echo "    [debug] resolved PG_CONF='${PG_CONF}'" >&2
 if [ -n "$PG_CONF" ] && [ -f "$PG_CONF" ]; then
   set_pg() {
     local key="$1" val="$2"

@@ -19,6 +19,19 @@
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
+# ---------------------------------------------------------------------------
+# Self-heal CRLF: if this file was saved/transferred with Windows line endings,
+# every line carries a trailing '\r', which silently breaks path tests like
+# [ -f "$VAR" ] (the value becomes "/path\r"). Detect that and re-exec a
+# CR-stripped copy of ourselves so the rest of the script runs cleanly.
+# ---------------------------------------------------------------------------
+if grep -q $'\r' "$0" 2>/dev/null; then
+  _clean="$(mktemp)"
+  tr -d '\r' < "$0" > "$_clean"
+  chmod +x "$_clean"
+  exec bash "$_clean" "$@"
+fi
+
 GROW_SWAP=${GROW_SWAP:-0}          # set to 1 to also grow swap to 4 GB
 SWAPPINESS=${SWAPPINESS:-10}
 REDIS_MAXMEM=${REDIS_MAXMEM:-128mb}

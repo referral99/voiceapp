@@ -27,9 +27,17 @@ CERTBOT_EMAIL=${CERTBOT_EMAIL:-admin@$DOMAIN}
 #   export RAZOR_KEY_ID=rzp_live_xxxxxxxx
 #   export RAZOR_KEY_SECRET=yyyyyyyyyyyyyyyy
 # If left unset the script keeps whatever is already in the existing .env so a
-# re-run never silently wipes working keys.
-RAZOR_KEY_ID=${RAZOR_KEY_ID:-$(sudo awk -F= '/^RAZOR_KEY_ID=/{print $2; exit}' "$APP_DIR/.env" 2>/dev/null || true)}
-RAZOR_KEY_SECRET=${RAZOR_KEY_SECRET:-$(sudo awk -F= '/^RAZOR_KEY_SECRET=/{print $2; exit}' "$APP_DIR/.env" 2>/dev/null || true)}
+# re-run never silently wipes working keys. Values in .env are base64-encoded
+# (see step [2/7]), so decode them back to plaintext here; the writer below
+# re-encodes once. `base64 -d` on empty/invalid input yields empty, so a
+# missing key stays empty rather than corrupting.
+_read_env_b64() {
+  local enc
+  enc=$(sudo awk -F= -v k="^$1=" '$0 ~ k {print $2; exit}' "$APP_DIR/.env" 2>/dev/null || true)
+  [ -n "$enc" ] && printf '%s' "$enc" | base64 -d 2>/dev/null || true
+}
+RAZOR_KEY_ID=${RAZOR_KEY_ID:-$(_read_env_b64 RAZOR_KEY_ID)}
+RAZOR_KEY_SECRET=${RAZOR_KEY_SECRET:-$(_read_env_b64 RAZOR_KEY_SECRET)}
 # Set ENABLE_TLS=0 to skip the Certbot/HTTPS step (e.g. before DNS points at
 # this box). The app will then be served over plain HTTP on the domain/IP.
 ENABLE_TLS=${ENABLE_TLS:-1}
@@ -65,17 +73,28 @@ else
   HSTS_SECONDS=0
 fi
 
+# Secrets are stored base64-ENCODED in the .env file. This is encoding, not
+# encryption: it only obscures values from a casual glance (chmod 600 below is
+# the real protection). settings.py's env_secret() decodes them at load time.
+# `base64 -w0` keeps the output on a single line (GNU coreutils on AL2023).
+b64() { printf '%s' "$1" | base64 -w0; }
+SECRET_B64=$(b64 "$SECRET")
+DBPASS_B64=$(b64 "$DBPASS")
+RAZOR_KEY_ID_B64=$(b64 "$RAZOR_KEY_ID")
+RAZOR_KEY_SECRET_B64=$(b64 "$RAZOR_KEY_SECRET")
+
 cat > "$APP_DIR/.env" <<ENVEOF
-DJANGO_SECRET_KEY=$SECRET
+DJANGO_SECRET_KEY=$SECRET_B64
 DJANGO_DEBUG=False
 DJANGO_ALLOWED_HOSTS=$DOMAIN,$WWW_DOMAIN,$PUBLIC_IP,127.0.0.1,localhost
 CSRF_TRUSTED_ORIGINS=$SCHEME://$DOMAIN,$SCHEME://$WWW_DOMAIN
 DJANGO_LOG_LEVEL=INFO
+SITE_URL=$SCHEME://$DOMAIN
 
 DB_ENGINE=postgres
 DB_NAME=anonymous_db
 DB_USER=appuser
-DB_PASSWORD=$DBPASS
+DB_PASSWORD=$DBPASS_B64
 DB_HOST=127.0.0.1
 DB_PORT=5432
 
@@ -89,8 +108,8 @@ SECURE_HSTS_SECONDS=$HSTS_SECONDS
 
 ACCOUNT_EMAIL_VERIFICATION=optional
 
-RAZOR_KEY_ID=$RAZOR_KEY_ID
-RAZOR_KEY_SECRET=$RAZOR_KEY_SECRET
+RAZOR_KEY_ID=$RAZOR_KEY_ID_B64
+RAZOR_KEY_SECRET=$RAZOR_KEY_SECRET_B64
 ENVEOF
 chmod 600 "$APP_DIR/.env"
 

@@ -48,8 +48,51 @@ def env_list(name, default=''):
     return [item.strip() for item in raw.split(',') if item.strip()]
 
 
+def env_secret(name, default=''):
+    """Read a secret from the environment, transparently base64-decoding it.
+
+    Production secrets are stored base64-ENCODED in the .env file (encoding, not
+    encryption - it only obscures values from a casual glance, it does NOT make
+    them secure; file permissions are the real protection). This helper decodes
+    them back to their real value at load time.
+
+    To stay backward compatible with plaintext values (e.g. the local dev .env),
+    a value is only decoded when it round-trips cleanly as base64 AND decodes to
+    valid UTF-8 text. Anything else is returned unchanged. Surrounding
+    whitespace / trailing newlines (which base64 tools often add) are stripped.
+    """
+    import base64
+    import binascii
+
+    raw = os.environ.get(name, default)
+    if raw is None:
+        return default
+    candidate = raw.strip()
+    if not candidate:
+        return candidate
+
+    try:
+        # validate=True rejects anything containing non-base64 characters, so
+        # ordinary plaintext secrets (which usually contain -, @, !, spaces,
+        # etc.) are left untouched.
+        decoded_bytes = base64.b64decode(candidate, validate=True)
+        decoded = decoded_bytes.decode('utf-8')
+    except (binascii.Error, ValueError, UnicodeDecodeError):
+        return candidate
+
+    # Re-encoding must reproduce the original string; otherwise the value just
+    # happened to look like base64 but wasn't intended as such - keep it as-is.
+    reencoded = base64.b64encode(decoded_bytes).decode('ascii')
+    if reencoded != candidate:
+        return candidate
+
+    return decoded.strip()
+
+
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get(
+# Stored base64-encoded in production .env; env_secret() decodes it (and leaves
+# the plaintext local-dev default untouched).
+SECRET_KEY = env_secret(
     'DJANGO_SECRET_KEY',
     'django-insecure-7imxz52l-!8zwg-r65zc%!g88i14gm6q((-$#a6-up#v#_-$+x',
 )
@@ -141,7 +184,7 @@ if os.environ.get('DB_ENGINE', 'sqlite').lower() in ('postgres', 'postgresql'):
             'ENGINE': 'django.db.backends.postgresql',
             'NAME': os.environ.get('DB_NAME', 'anonymous_db'),
             'USER': os.environ.get('DB_USER', 'postgres'),
-            'PASSWORD': os.environ.get('DB_PASSWORD', 'postgres'),
+            'PASSWORD': env_secret('DB_PASSWORD', 'postgres'),
             'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
             'PORT': os.environ.get('DB_PORT', '5432'),
             'OPTIONS': {
@@ -238,7 +281,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # REPORT_GENDER_BREAKDOWN to compute the visitors-by-gender section.
 REPORT_ENABLED = env_bool('REPORT_ENABLED', False)
 REPORT_USERNAME = os.environ.get('REPORT_USERNAME', 'admin')
-REPORT_PASSWORD = os.environ.get('REPORT_PASSWORD', '')
+REPORT_PASSWORD = env_secret('REPORT_PASSWORD', '')
 REPORT_GENDER_BREAKDOWN = env_bool('REPORT_GENDER_BREAKDOWN', True)
 # Resolve visitor IPs to countries using the on-disk cache / ip-api.com. Turn
 # off to keep the report fully offline (countries show as "Unresolved").
@@ -246,22 +289,26 @@ REPORT_GEO_LOOKUP = env_bool('REPORT_GEO_LOOKUP', True)
 
 
 # Razorpay (payments). Leave blank to disable the payment gateway gracefully.
-RAZOR_KEY_ID = os.environ.get('RAZOR_KEY_ID', '')
-RAZOR_KEY_SECRET = os.environ.get('RAZOR_KEY_SECRET', '')
+# Keys are stored base64-encoded in production .env; env_secret() decodes them.
+RAZOR_KEY_ID = env_secret('RAZOR_KEY_ID', '')
+RAZOR_KEY_SECRET = env_secret('RAZOR_KEY_SECRET', '')
 
 # Cloudflare Realtime TURN (WebRTC relay for voice calls).
 # The TURN key ID and its API token are long-term secrets kept server-side.
 # The backend uses them to mint short-lived ICE credentials for each call
 # (see chat.views.ice_servers). Leave blank to fall back to STUN-only.
-CLOUDFLARE_TURN_KEY_ID = os.environ.get('CLOUDFLARE_TURN_KEY_ID', '')
-CLOUDFLARE_TURN_API_TOKEN = os.environ.get('CLOUDFLARE_TURN_API_TOKEN', '')
+# Stored base64-encoded in production .env; env_secret() decodes them.
+CLOUDFLARE_TURN_KEY_ID = env_secret('CLOUDFLARE_TURN_KEY_ID', '')
+CLOUDFLARE_TURN_API_TOKEN = env_secret('CLOUDFLARE_TURN_API_TOKEN', '')
 # How long issued TURN credentials remain valid, in seconds. Should comfortably
 # exceed the longest expected call (default: 24h).
 CLOUDFLARE_TURN_TTL = int(os.environ.get('CLOUDFLARE_TURN_TTL', '86400'))
 
 # Twilio (OTP SMS). Leave blank to fall back to logging the OTP (dev mode).
+# TWILIO_SID / TWILIO_FROM are identifiers; TWILIO_TOKEN is the real secret and
+# is stored base64-encoded in production .env (decoded by env_secret()).
 TWILIO_SID = os.environ.get('TWILIO_SID', '')
-TWILIO_TOKEN = os.environ.get('TWILIO_TOKEN', '')
+TWILIO_TOKEN = env_secret('TWILIO_TOKEN', '')
 TWILIO_FROM = os.environ.get('TWILIO_FROM', '')
 
 LOGIN_URL = 'login'
@@ -303,7 +350,10 @@ EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
 EMAIL_USE_TLS = env_bool('EMAIL_USE_TLS', True)
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+# SMTP password/app-password is a real secret: stored base64-encoded in prod
+# .env (decoded by env_secret()). Empty stays empty, so the console-backend
+# fallback below still works when no SMTP password is configured.
+EMAIL_HOST_PASSWORD = env_secret('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER or 'no-reply@localhost')
 
 # Choose the email backend. Default to the console backend whenever SMTP

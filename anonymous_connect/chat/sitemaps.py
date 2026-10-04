@@ -6,8 +6,16 @@ class StaticViewSitemap(Sitemap):
     changefreq = 'daily'
 
     def items(self):
-        # Yaha apne saare important pages ke naam daalo
-        return ['home', 'about', 'notes_list'] 
+        # Public pages to include in the sitemap. These names must match
+        # the `name=` values defined in chat/urls.py.
+        return [
+            'home',
+            'privacy_policy',
+            'terms_conditions',
+            'refund_policy',
+            'contact_us',
+            'service_fulfillment',
+        ]
 
     def location(self, item):
         return reverse(item)

@@ -83,6 +83,7 @@ INSTALLED_APPS = [
     'chat',
     'activity_logging',
     'django.contrib.sites',
+    'django.contrib.sitemaps',
     'allauth',
     'allauth.account',
     'allauth.socialaccount',

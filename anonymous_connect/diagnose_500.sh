@@ -26,7 +26,6 @@
 # non-destructive actions (service restarts, running migrations, reloading
 # nginx). It never drops data or rewrites secrets.
 # ---------------------------------------------------------------------------
-set -uo pipefail
 
 APP_DIR=${APP_DIR:-/home/ec2-user/voice/voiceapp/anonymous_connect}
 VENV=${VENV:-$APP_DIR/.venv}
@@ -47,6 +46,25 @@ hr()   { printf '%s\n' "--------------------------------------------------------
 # Read a KEY from the production .env (values may be base64-encoded; we only
 # need to test presence / plain flags here, so we do not decode secrets).
 env_get() { sudo awk -F= -v k="^$1=" '$0 ~ k {sub(/^[^=]*=/,""); print; exit}' "$APP_DIR/.env" 2>/dev/null; }
+
+# The public domain nginx routes by name. A bare request to 127.0.0.1 carries
+# Host: 127.0.0.1, which matches NO server_name -> nginx falls through to the
+# stock default server and 404s. So smoke tests must send the real Host header
+# (and -L to follow the HTTP->HTTPS 301 that SECURE_SSL_REDIRECT emits).
+DOMAIN=$(env_get DJANGO_ALLOWED_HOSTS | tr ',' '\n' | grep -vE '^(127\.0\.0\.1|localhost|\*)$' | head -n1)
+DOMAIN=${DOMAIN:-decentapp.org}
+
+# smoke PATH -> echoes the final HTTP code reaching the Django app through
+# nginx, routed by the real Host and following redirects. --resolve pins the
+# domain to localhost so DNS/Cloudflare are bypassed and we test THIS box.
+smoke() {
+  local path=$1
+  curl -sL --max-time 10 \
+       --resolve "$DOMAIN:80:127.0.0.1" \
+       --resolve "$DOMAIN:443:127.0.0.1" \
+       -o /dev/null -w '%{http_code}' \
+       "http://$DOMAIN$path" 2>/dev/null || echo "000"
+}
 
 say "${BOLD}== Anonymous Connect 500 diagnosis ==${RESET}"
 say "App dir : $APP_DIR"
@@ -154,12 +172,14 @@ fi
 hr
 
 # --- 7. Local smoke test (bypasses the internet / Cloudflare) --------------
-say "${BOLD}[7] Local smoke test via nginx${RESET}"
+say "${BOLD}[7] Local smoke test via nginx (Host: $DOMAIN, following redirects)${RESET}"
 for path in /healthz/ / ; do
-  code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1$path" || echo "000")
+  code=$(smoke "$path")
   case "$code" in
-    2*|3*) ok  "GET $path -> HTTP $code" ;;
-    000)   bad "GET $path -> no response (connection refused)" ;;
+    2*)    ok  "GET $path -> HTTP $code" ;;
+    3*)    warn "GET $path -> HTTP $code (redirect not followed to a 2xx - check SSL redirect / cert)" ;;
+    404)   bad "GET $path -> HTTP 404 (nginx is not routing to Django - the stock default server block is shadowing the app; run with --fix)" ;;
+    000)   bad "GET $path -> no response (connection refused - is nginx up?)" ;;
     *)     bad "GET $path -> HTTP $code" ;;
   esac
 done
@@ -219,17 +239,60 @@ if [ -x "$PYBIN" ]; then
   fi
 fi
 
+# 7c-bis. Neutralise the stock nginx default server block if it is shadowing
+# the app. The AL2023 default /etc/nginx/nginx.conf ships a `server { listen
+# 80; server_name _; ... }` block that answers host-less requests (curl to
+# 127.0.0.1, health probes) and 404s them before they ever reach Django.
+# We comment the whole block out (idempotent) and keep a timestamped backup so
+# it is fully reversible. Named requests to $DOMAIN are unaffected either way.
+NGINX_MAIN=/etc/nginx/nginx.conf
+if sudo test -f "$NGINX_MAIN" && sudo grep -qE '^\s*listen\s+80\s*;' "$NGINX_MAIN"; then
+  ts=$(date +%Y%m%d%H%M%S)
+  sudo cp -a "$NGINX_MAIN" "$NGINX_MAIN.bak.$ts"
+  # Comment every line of the first `server { ... }` block that contains a
+  # bare `listen 80;` (the stock default). awk tracks brace depth so we only
+  # touch that one block and leave the rest of nginx.conf intact.
+  sudo awk '
+    BEGIN{inblk=0; depth=0}
+    /^[[:space:]]*server[[:space:]]*\{/ && inblk==0 {
+      # peek: start buffering; decide once we know it is the default block
+      inblk=1; depth=1; buf=$0 ORS; isdef=0; next
+    }
+    inblk==1 {
+      buf=buf $0 ORS
+      n=gsub(/\{/,"{"); depth+=n
+      m=gsub(/\}/,"}"); depth-=m
+      if ($0 ~ /listen[[:space:]]+80[[:space:]]*;/) isdef=1
+      if (depth<=0) {
+        if (isdef) { gsub(/\n/,"\n# ",buf); sub(/^/,"# ",buf) }
+        printf "%s", buf
+        inblk=0; buf=""
+        next
+      }
+      next
+    }
+    { print }
+  ' "$NGINX_MAIN" | sudo tee "$NGINX_MAIN.new" >/dev/null
+  if sudo nginx -t -c "$NGINX_MAIN.new" 2>/dev/null; then
+    sudo mv "$NGINX_MAIN.new" "$NGINX_MAIN"
+    ok "Commented out the stock default server block (backup: nginx.conf.bak.$ts)."
+  else
+    sudo rm -f "$NGINX_MAIN.new"
+    warn "Skipped nginx default-block edit (test of modified config failed; original left untouched)."
+  fi
+fi
+
 # 7d. Restart the app and reload nginx.
 sudo systemctl restart "$SERVICE" 2>/dev/null && ok "$SERVICE restarted." || warn "Could not restart $SERVICE."
 sudo nginx -t 2>/dev/null && sudo systemctl reload nginx 2>/dev/null && ok "nginx reloaded." || warn "nginx reload skipped (config test failed)."
 
 # 7e. Re-run the smoke test.
 hr
-say "${BOLD}== Post-fix smoke test ==${RESET}"
+say "${BOLD}== Post-fix smoke test (Host: $DOMAIN) ==${RESET}"
 for path in /healthz/ / ; do
-  code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1$path" || echo "000")
+  code=$(smoke "$path")
   case "$code" in
-    2*|3*) ok  "GET $path -> HTTP $code" ;;
+    2*)    ok  "GET $path -> HTTP $code" ;;
     *)     bad "GET $path -> HTTP $code (still failing - inspect: sudo journalctl -u $SERVICE -n 50)" ;;
   esac
 done

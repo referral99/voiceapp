@@ -189,9 +189,39 @@ server {
 }
 NGINXEOF
 
-# Remove the default server block if present (it also claims :80 default_server).
-if [ -f /etc/nginx/nginx.conf ]; then
-  sudo sed -i '/listen       80 default_server;/d; /listen       \[::\]:80 default_server;/d' /etc/nginx/nginx.conf || true
+# Neutralise the stock default server block if present. The AL2023 nginx.conf
+# ships `server { listen 80; listen [::]:80; server_name _; ... }`. Because our
+# app block (above) is `listen 80 default_server`, the stock block still answers
+# host-less requests (curl to 127.0.0.1, health/uptime probes, Let's Encrypt's
+# own validation) and 404s them before they reach Django. We comment that one
+# block out (idempotent, with a backup) so EVERY :80 request routes to the app.
+# NOTE: the previous `sed` here looked for `listen 80 default_server;`, which
+# the stock file never contains (it uses a bare `listen 80;`), so it silently
+# did nothing - that mismatch is exactly what left the 404s in place.
+if [ -f /etc/nginx/nginx.conf ] && grep -qE '^\s*listen\s+80\s*;' /etc/nginx/nginx.conf; then
+  sudo cp -a /etc/nginx/nginx.conf "/etc/nginx/nginx.conf.bak.$(date +%Y%m%d%H%M%S)"
+  sudo awk '
+    BEGIN{inblk=0; depth=0}
+    /^[[:space:]]*server[[:space:]]*\{/ && inblk==0 { inblk=1; depth=1; buf=$0 ORS; isdef=0; next }
+    inblk==1 {
+      buf=buf $0 ORS
+      depth += gsub(/\{/,"{"); depth -= gsub(/\}/,"}")
+      if ($0 ~ /listen[[:space:]]+80[[:space:]]*;/) isdef=1
+      if (depth<=0) {
+        if (isdef) { gsub(/\n/,"\n# ",buf); sub(/^/,"# ",buf) }
+        printf "%s", buf; inblk=0; buf=""; next
+      }
+      next
+    }
+    { print }
+  ' /etc/nginx/nginx.conf | sudo tee /etc/nginx/nginx.conf.new >/dev/null
+  # Only swap in the edited file if it still passes nginx's own validation.
+  if sudo nginx -t -c /etc/nginx/nginx.conf.new >/dev/null 2>&1; then
+    sudo mv /etc/nginx/nginx.conf.new /etc/nginx/nginx.conf
+  else
+    sudo rm -f /etc/nginx/nginx.conf.new
+    echo "WARNING: edited nginx.conf failed validation; left the original in place." >&2
+  fi
 fi
 
 sudo nginx -t

@@ -4,6 +4,8 @@ import time
 
 import razorpay
 from django.shortcuts import render, redirect
+from django.http import JsonResponse
+from django.urls import reverse
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.models import User
@@ -351,6 +353,60 @@ def match_user(request, mode, name):
         'mode': mode,
         'name': profile.display_name,
     })
+
+
+def match_poll(request, mode, name):
+    """Background matchmaking poll used by the searching overlay.
+
+    This is the AJAX counterpart of ``match_user`` / ``reconnect_user``. The
+    searching screen polls it every few seconds via ``fetch`` instead of
+    reloading the whole page, so the connecting UI stays stable and the waiting
+    tune keeps playing without restarting. It performs one matchmaking attempt
+    and returns JSON:
+
+        {"matched": true,  "redirect_url": "/match/<mode>/<name>/"}
+        {"matched": false}
+
+    When a partner is found both profiles are already paired into a room by
+    ``_find_and_pair_match``; the client then navigates to ``match_user`` /
+    ``reconnect_user``, which detects the existing room and renders the call
+    screen (no second match is attempted).
+    """
+    profile = get_user_profile(request)
+    profile.reset_daily_counters_if_needed()
+
+    # ``reconnecting=1`` keeps us on the reconnect path so we still prefer the
+    # previous partner. The reconnect allowance was already spent on the first
+    # (page) request, so polling never consumes or re-checks it here.
+    reconnecting = request.GET.get('reconnecting') == '1'
+
+    # Already in an active room (partner found on a previous poll, or we were
+    # paired by the other side) -> tell the client to go to the call screen.
+    if profile.status == Status.Busy and profile.active_room_name:
+        return JsonResponse({
+            'matched': True,
+            'redirect_url': reverse('match_user', kwargs={'mode': mode, 'name': name}),
+        })
+
+    if reconnecting and profile.active_room_name:
+        # Release stale room state before searching again, mirroring
+        # reconnect_user's polling branch.
+        profile.active_room_name = None
+        profile.status = Status.Online
+        profile.save(update_fields=['active_room_name', 'status'])
+
+    match, _room_name = _find_and_pair_match(
+        profile, prefer_last_partner=reconnecting
+    )
+
+    if match:
+        target = 'reconnect_user' if reconnecting else 'match_user'
+        url = reverse(target, kwargs={'mode': mode, 'name': name})
+        if reconnecting:
+            url += '?polling=1'
+        return JsonResponse({'matched': True, 'redirect_url': url})
+
+    return JsonResponse({'matched': False})
 
 
 def reconnect_user(request, mode, name):

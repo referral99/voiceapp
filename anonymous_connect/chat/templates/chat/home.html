@@ -27,8 +27,10 @@
         </div>
     </div>
 
-    <!-- Waiting tune: one of t1-t4 is picked at random when the search starts and
-         resumes seamlessly across the 3s polling reloads. -->
+    <!-- Waiting tune: one of t1-t4 is picked at random when the search starts.
+         The connecting screen no longer reloads while searching (it polls the
+         server in the background), so this element lives for the whole wait and
+         plays continuously without restarting or stuttering. -->
     <audio id="waitingTune" loop></audio>
     <script>
         (function () {
@@ -39,26 +41,9 @@
                 "{% static 'waiting_tune/t4.mpeg' %}"
             ];
             var audio = document.getElementById('waitingTune');
-            if (!audio) return;
-
-            // Keep the same tune across the automatic 3s polling reloads so it
-            // doesn't restart or switch every few seconds. A fresh search (no
-            // stored tune) picks a new random one.
-            var src = sessionStorage.getItem('waitingTuneSrc');
-            if (!src) {
-                src = TUNES[Math.floor(Math.random() * TUNES.length)];
-                sessionStorage.setItem('waitingTuneSrc', src);
-            }
-            audio.src = src;
-
-            // Resume from roughly where the previous page-load left off.
-            var startedAt = parseFloat(sessionStorage.getItem('waitingTuneStartedAt') || '0');
-            var elapsed = parseFloat(sessionStorage.getItem('waitingTuneElapsed') || '0');
-
-            audio.addEventListener('loadedmetadata', function () {
-                if (audio.duration && isFinite(audio.duration)) {
-                    try { audio.currentTime = elapsed % audio.duration; } catch (e) {}
-                }
+            if (audio) {
+                // Pick a random tune once for this search and just let it loop.
+                audio.src = TUNES[Math.floor(Math.random() * TUNES.length)];
                 audio.play().catch(function () {
                     // Autoplay may be blocked until the user interacts. Start the
                     // tune on the first click/touch/keypress as a fallback.
@@ -72,40 +57,62 @@
                     document.addEventListener('keydown', resume);
                     document.addEventListener('touchstart', resume);
                 });
-            });
-
-            // Track playback position so the next reload can resume in place.
-            var tick = setInterval(function () {
-                sessionStorage.setItem('waitingTuneElapsed', String(elapsed + audio.currentTime));
-            }, 500);
-
-            window.addEventListener('beforeunload', function () {
-                clearInterval(tick);
-                sessionStorage.setItem('waitingTuneElapsed', String(elapsed + audio.currentTime));
-            });
+            }
         })();
 
-        // Clears the tune state so the next search starts a fresh random one.
+        // Stops the tune (used by the Cancel link before leaving the page).
         function stopWaitingTune() {
             var audio = document.getElementById('waitingTune');
             if (audio) { audio.pause(); }
-            sessionStorage.removeItem('waitingTuneSrc');
-            sessionStorage.removeItem('waitingTuneElapsed');
-            sessionStorage.removeItem('waitingTuneStartedAt');
         }
     </script>
 
     <script>
-        setTimeout(function () {
+        (function () {
+            // Poll the server for a partner in the background instead of
+            // reloading the page every few seconds. This keeps the connecting
+            // UI steady (no flashing) and lets the waiting tune play smoothly.
             {% if reconnecting %}
-            // Keep retrying through the reconnect path so we continue to prefer
-            // the previous partner if they start searching again. The polling
-            // flag prevents the retry from consuming the reconnect allowance.
-            window.location.href = "{% url 'reconnect_user' mode=mode name=name %}?polling=1";
+            var POLL_URL = "{% url 'match_poll' mode=mode name=name %}?reconnecting=1";
             {% else %}
-            window.location.href = "{% url 'match_user' mode=mode name=name %}";
+            var POLL_URL = "{% url 'match_poll' mode=mode name=name %}";
             {% endif %}
-        }, 3000);
+            var POLL_INTERVAL = 3000;
+            var stopped = false;
+
+            function goTo(url) {
+                stopped = true;
+                stopWaitingTune();
+                window.location.href = url;
+            }
+
+            function poll() {
+                if (stopped) return;
+                fetch(POLL_URL, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    credentials: 'same-origin',
+                    cache: 'no-store'
+                })
+                .then(function (resp) { return resp.ok ? resp.json() : null; })
+                .then(function (data) {
+                    if (stopped) return;
+                    if (data && data.matched && data.redirect_url) {
+                        goTo(data.redirect_url);
+                    } else {
+                        setTimeout(poll, POLL_INTERVAL);
+                    }
+                })
+                .catch(function () {
+                    // Network hiccup: keep trying.
+                    if (!stopped) setTimeout(poll, POLL_INTERVAL);
+                });
+            }
+
+            // Stop polling if the user navigates away (e.g. clicks Cancel).
+            window.addEventListener('beforeunload', function () { stopped = true; });
+
+            setTimeout(poll, POLL_INTERVAL);
+        })();
     </script>
 
 {% else %}

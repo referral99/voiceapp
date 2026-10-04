@@ -21,6 +21,10 @@ urlpatterns = [
     # Matchmaking Trigger
     # <str:mode> will be 'voice' or 'chat' passed from your buttons
     path('match/<str:mode>/<str:name>/', views.match_user, name='match_user'),
+    # Background matchmaking poll (JSON) for the searching overlay. Lets the
+    # connecting screen check for a partner without reloading the whole page,
+    # so the UI stays stable and the waiting tune plays smoothly.
+    path('match-poll/<str:mode>/<str:name>/', views.match_poll, name='match_poll'),
     # Reconnect with a new partner after the current one disconnects.
     # Free members get one reconnect; further attempts are gated behind premium.
     path('reconnect/<str:mode>/<str:name>/', views.reconnect_user, name='reconnect_user'),

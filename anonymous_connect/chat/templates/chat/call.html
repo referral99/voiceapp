@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
     <title>Connecting... | Anonymous Connect</title>
     <link rel="stylesheet" href="{% static 'chat/css/style.css' %}">
     <style>
@@ -11,9 +11,19 @@
         * { box-sizing: border-box; }
         body { margin: 0; background: #d2dbdf; font-family: "Segoe UI", Helvetica, Arial, sans-serif; }
 
+        /* Lock the app to the real visible viewport. Plain 100vh on mobile
+           includes the area behind the browser address bar/toolbars, which
+           pushed the input bar below the fold and forced users to scroll down
+           to type. dvh (dynamic viewport height) tracks the actually-visible
+           area, with vh/-webkit-fill-available fallbacks for older browsers. */
+        html, body { height: 100%; }
         .wa-phone {
-            max-width: 480px; margin: 0 auto; height: 100vh;
+            max-width: 480px; margin: 0 auto;
+            height: 100vh;                 /* fallback */
+            height: -webkit-fill-available;/* iOS Safari fallback */
+            height: 100dvh;                /* modern mobile: excludes browser chrome */
             display: flex; flex-direction: column; background: #efeae2;
+            overflow: hidden;              /* only #chat-log scrolls, never the page */
         }
 
         /* --- Header (indigo/violet gradient — distinct from WhatsApp) --- */

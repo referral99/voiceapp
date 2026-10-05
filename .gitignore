@@ -12,7 +12,9 @@ detect_check.sh
 ip_country_cache.json
 activity_report.xlsx
 Notes.txt
-    
+.env.generated
+
+
 # Virtual environments
 venv/
 env/

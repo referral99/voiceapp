@@ -16,12 +16,16 @@
            pushed the input bar below the fold and forced users to scroll down
            to type. dvh (dynamic viewport height) tracks the actually-visible
            area, with vh/-webkit-fill-available fallbacks for older browsers. */
-        html, body { height: 100%; }
+        html, body { height: 100%; overflow: hidden; }
+        body { position: fixed; inset: 0; width: 100%; }
         .wa-phone {
             max-width: 480px; margin: 0 auto;
-            height: 100vh;                 /* fallback */
-            height: -webkit-fill-available;/* iOS Safari fallback */
-            height: 100dvh;                /* modern mobile: excludes browser chrome */
+            /* --app-height is set by JS from the real visible viewport
+               (window.innerHeight / visualViewport). The 100dvh/vh values are
+               only used before the script runs or if JS is disabled. */
+            height: 100vh;
+            height: 100dvh;
+            height: var(--app-height, 100vh);
             display: flex; flex-direction: column; background: #efeae2;
             overflow: hidden;              /* only #chat-log scrolls, never the page */
         }
@@ -62,7 +66,7 @@
 
         /* --- Chat area: custom wallpaper image --- */
         #chat-log {
-            flex: 1 1 auto; overflow-y: auto; padding: 14px 10px;
+            flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 14px 10px;
             display: flex; flex-direction: column; gap: 2px;
             background-color: #2a3a5e;
             background-image: url("{% static 'chat/images/chat-bg.png' %}");
@@ -339,6 +343,31 @@
 </div>
 
 <script>
+    // --- Mobile viewport height lock -------------------------------------
+    // Some mobile browsers mis-handle 100vh/100dvh (the chat input ended up
+    // below the fold, forcing users to scroll to type). We measure the real
+    // visible height and pin the app to it via the --app-height CSS variable,
+    // updating on resize, orientation change, and keyboard show/hide.
+    (function () {
+        function setAppHeight() {
+            var vv = window.visualViewport;
+            var h = vv ? vv.height : window.innerHeight;
+            document.documentElement.style.setProperty('--app-height', h + 'px');
+        }
+        setAppHeight();
+        window.addEventListener('resize', setAppHeight);
+        window.addEventListener('orientationchange', function () {
+            // Delay so the browser reports post-rotation dimensions.
+            setTimeout(setAppHeight, 150);
+        });
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', setAppHeight);
+            window.visualViewport.addEventListener('scroll', setAppHeight);
+        }
+        // Catch late layout shifts (address bar settling) right after load.
+        window.addEventListener('load', function () { setTimeout(setAppHeight, 100); });
+    })();
+
     sessionStorage.removeItem('search_start_time');
     // Stop/reset the waiting tune now that a partner has been found so the next
     // search starts a fresh random tune.

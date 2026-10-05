@@ -38,6 +38,41 @@ _read_env_b64() {
 }
 RAZOR_KEY_ID=${RAZOR_KEY_ID:-$(_read_env_b64 RAZOR_KEY_ID)}
 RAZOR_KEY_SECRET=${RAZOR_KEY_SECRET:-$(_read_env_b64 RAZOR_KEY_SECRET)}
+
+# --- Email / SMTP (OTP + verification mail) ---
+# Real OTP delivery needs an SMTP backend with valid credentials. Without them
+# settings.py silently falls back to the console backend and NO mail is sent,
+# which is exactly why users stopped receiving login codes. These values can be
+# overridden by exporting them before running the script; otherwise the known
+# production defaults below are used. EMAIL_HOST_PASSWORD is a real secret, so
+# (like the other secrets) it is read back base64-decoded from the existing
+# .env on a re-run and re-encoded once by the writer below.
+EMAIL_HOST=${EMAIL_HOST:-smtp.gmail.com}
+EMAIL_PORT=${EMAIL_PORT:-587}
+EMAIL_USE_TLS=${EMAIL_USE_TLS:-True}
+EMAIL_HOST_USER=${EMAIL_HOST_USER:-noreply.chatsanti@gmail.com}
+EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD:-$(_read_env_b64 EMAIL_HOST_PASSWORD)}
+EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD:-zbwc idxj qxlv oina}
+DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-noreply.chatsanti@gmail.com}
+
+# --- Cloudflare Realtime TURN (WebRTC voice relay) ---
+# Without these the app falls back to STUN-only, which breaks calls behind
+# strict NATs. KEY_ID + API_TOKEN are long-term secrets -> base64-encoded in
+# .env (decoded by env_secret()). Read back from the existing .env on re-run,
+# else fall back to the known values; override by exporting before running.
+CLOUDFLARE_TURN_KEY_ID=${CLOUDFLARE_TURN_KEY_ID:-$(_read_env_b64 CLOUDFLARE_TURN_KEY_ID)}
+CLOUDFLARE_TURN_KEY_ID=${CLOUDFLARE_TURN_KEY_ID:-48a6b5767ff96d58da479c1e130a360b}
+CLOUDFLARE_TURN_API_TOKEN=${CLOUDFLARE_TURN_API_TOKEN:-$(_read_env_b64 CLOUDFLARE_TURN_API_TOKEN)}
+CLOUDFLARE_TURN_API_TOKEN=${CLOUDFLARE_TURN_API_TOKEN:-2a81a634b07be12a64e3f803029aee223877b66f599e0b91b0ca9afb696bcad1}
+
+# --- Activity report (/report.html) ---
+# Password-protected analytics dashboard. REPORT_PASSWORD is a secret ->
+# base64-encoded (decoded by env_secret()); the others are plaintext flags.
+REPORT_ENABLED=${REPORT_ENABLED:-True}
+REPORT_USERNAME=${REPORT_USERNAME:-admin}
+REPORT_PASSWORD=${REPORT_PASSWORD:-$(_read_env_b64 REPORT_PASSWORD)}
+REPORT_PASSWORD=${REPORT_PASSWORD:-Report2@5314}
+
 # Set ENABLE_TLS=0 to skip the Certbot/HTTPS step (e.g. before DNS points at
 # this box). The app will then be served over plain HTTP on the domain/IP.
 ENABLE_TLS=${ENABLE_TLS:-1}
@@ -82,6 +117,13 @@ SECRET_B64=$(b64 "$SECRET")
 DBPASS_B64=$(b64 "$DBPASS")
 RAZOR_KEY_ID_B64=$(b64 "$RAZOR_KEY_ID")
 RAZOR_KEY_SECRET_B64=$(b64 "$RAZOR_KEY_SECRET")
+# The SMTP app password is a real secret -> base64-encode it like the others so
+# settings.py's env_secret() decodes it back to the real Gmail app password.
+EMAIL_HOST_PASSWORD_B64=$(b64 "$EMAIL_HOST_PASSWORD")
+# Cloudflare TURN + report secrets are also base64-encoded like the rest.
+CLOUDFLARE_TURN_KEY_ID_B64=$(b64 "$CLOUDFLARE_TURN_KEY_ID")
+CLOUDFLARE_TURN_API_TOKEN_B64=$(b64 "$CLOUDFLARE_TURN_API_TOKEN")
+REPORT_PASSWORD_B64=$(b64 "$REPORT_PASSWORD")
 
 cat > "$APP_DIR/.env" <<ENVEOF
 DJANGO_SECRET_KEY=$SECRET_B64
@@ -110,6 +152,26 @@ ACCOUNT_EMAIL_VERIFICATION=optional
 
 RAZOR_KEY_ID=$RAZOR_KEY_ID_B64
 RAZOR_KEY_SECRET=$RAZOR_KEY_SECRET_B64
+
+# Email / SMTP. EMAIL_BACKEND=smtp forces real delivery (otherwise settings.py
+# falls back to the console backend when no password is set). The password is
+# stored base64-encoded; env_secret() decodes it at load time.
+EMAIL_BACKEND=smtp
+EMAIL_HOST=$EMAIL_HOST
+EMAIL_PORT=$EMAIL_PORT
+EMAIL_USE_TLS=$EMAIL_USE_TLS
+EMAIL_HOST_USER=$EMAIL_HOST_USER
+EMAIL_HOST_PASSWORD=$EMAIL_HOST_PASSWORD_B64
+DEFAULT_FROM_EMAIL=$DEFAULT_FROM_EMAIL
+
+# Cloudflare Realtime TURN (WebRTC relay). Secrets are base64-encoded.
+CLOUDFLARE_TURN_KEY_ID=$CLOUDFLARE_TURN_KEY_ID_B64
+CLOUDFLARE_TURN_API_TOKEN=$CLOUDFLARE_TURN_API_TOKEN_B64
+
+# Activity report dashboard (/report.html). REPORT_PASSWORD is base64-encoded.
+REPORT_ENABLED=$REPORT_ENABLED
+REPORT_USERNAME=$REPORT_USERNAME
+REPORT_PASSWORD=$REPORT_PASSWORD_B64
 ENVEOF
 chmod 600 "$APP_DIR/.env"
 

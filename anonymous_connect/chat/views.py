@@ -874,10 +874,10 @@ def send_email_otp(request):
     request.session.modified = True
     request.session.save()
 
-    # Always log the OTP to the server console so a developer can read it even if
-    # the recipient's inbox is slow, the code lands in spam, or SMTP silently
-    # drops it. This log line is the ground truth for debugging delivery.
-    logger.info("Email OTP for %s is %s (backend=%s)", email, otp, settings.EMAIL_BACKEND)
+    # Log that a code was issued WITHOUT the code itself - the OTP is a secret
+    # and must never land in server logs in production. We still record the
+    # recipient and the active backend so delivery can be debugged.
+    logger.info("Email OTP issued for %s (backend=%s)", email, settings.EMAIL_BACKEND)
 
     # Deliver the code. If sending fails (e.g. SMTP misconfigured), fall back to
     # logging it so development logins still work. We send a formal, branded
@@ -902,7 +902,6 @@ def send_email_otp(request):
             logger.info("Email OTP to %s dispatched via SMTP", email)
     except Exception as exc:  # noqa: BLE001 - don't block login if email fails
         logger.error("Email OTP send failed for %s: %s", email, exc)
-        logger.info("OTP for %s is %s (email send failed)", email, otp)
         sent = False
 
     return render(request, 'chat/verify_otp.html', {
@@ -921,11 +920,14 @@ def verify_email_otp(request):
         email = request.session.get('email')
         issued_at = request.session.get('email_otp_ts')
 
+        # Log the verification attempt WITHOUT the codes themselves. We record
+        # whether a code was supplied / stored and the age, which is enough to
+        # debug expiry/session issues without leaking the secret into logs.
         logger.info(
-            "Verify OTP: entered=%r saved=%r email=%r age=%ss",
-            user_otp,
-            saved_otp,
+            "Verify OTP attempt: email=%r has_input=%s has_saved=%s age=%ss",
             email,
+            bool(user_otp),
+            bool(saved_otp),
             None if issued_at is None else round(time.time() - issued_at, 1),
         )
 
@@ -991,7 +993,7 @@ def verify_email_otp(request):
             request.session.pop('email_otp_ts', None)
             return redirect('home')
 
-        logger.warning("OTP mismatch for %s: entered=%r expected=%r", email, user_otp, saved_otp)
+        logger.warning("OTP mismatch for %s", email)
         return render(request, 'chat/verify_otp.html', {
             'error': 'That code is incorrect. Please check and try again.',
             'email': email,
@@ -1145,7 +1147,13 @@ def ice_servers(request):
             if isinstance(ice, dict):
                 ice = [ice]
             return JsonResponse({'iceServers': ice})
-        logger.error("Cloudflare TURN response missing iceServers: %s", data)
+        # Log only the shape of the response (HTTP status + top-level keys),
+        # never the raw body - it can contain TURN credential material.
+        logger.error(
+            "Cloudflare TURN response missing iceServers (status=%s, keys=%s)",
+            resp.status_code,
+            list(data.keys()) if isinstance(data, dict) else type(data).__name__,
+        )
     except Exception as exc:  # noqa: BLE001 - never let TURN break the call page
         logger.error("Cloudflare TURN credential generation failed: %s", exc)
 

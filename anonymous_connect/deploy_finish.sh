@@ -202,7 +202,14 @@ WantedBy=multi-user.target
 UNITEOF
 
 sudo systemctl daemon-reload
-sudo systemctl enable --now anonymous_connect
+sudo systemctl enable anonymous_connect
+# IMPORTANT: use `restart`, not just `enable --now`. On a re-run the service is
+# already active, and `enable --now` only STARTS a stopped unit - it will NOT
+# reload an already-running process. Daphne reads .env only at startup (see
+# settings.load_dotenv), so without an explicit restart it keeps serving with
+# the OLD environment and any .env changes above (e.g. new SMTP/email config)
+# never take effect. `restart` guarantees the fresh .env is loaded.
+sudo systemctl restart anonymous_connect
 sleep 3
 sudo systemctl is-active anonymous_connect
 

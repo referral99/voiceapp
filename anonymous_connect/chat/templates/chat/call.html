@@ -4,6 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+    <!-- Prevent mobile Chrome from serving a stale cached copy of this page. -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Connecting... | Anonymous Connect</title>
     <link rel="stylesheet" href="{% static 'chat/css/style.css' %}">
     <style>
@@ -66,7 +70,10 @@
 
         /* --- Chat area: custom wallpaper image --- */
         #chat-log {
-            flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 14px 10px;
+            flex: 1 1 auto; min-height: 0;
+            overflow-y: auto; -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain; touch-action: pan-y;
+            padding: 14px 10px;
             display: flex; flex-direction: column; gap: 2px;
             background-color: #2a3a5e;
             background-image: url("{% static 'chat/images/chat-bg.png' %}");
